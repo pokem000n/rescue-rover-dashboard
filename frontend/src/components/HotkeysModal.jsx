@@ -7,6 +7,8 @@ export default function HotkeysModal({ isOpen, onClose }) {
   const shortcuts = [
     { key: 'SPACE', label: 'Start / Pause Match Timer', category: 'Match Control' },
     { key: 'S', label: 'Take Camera Snapshot (Watermarked)', category: 'Camera' },
+    { key: 'G', label: 'Open Quick Operator Guide (নির্দেশিকা)', category: 'Help' },
+    { key: '1 - 5', label: 'Switch Views (Mission, Logbook, Risks, System, All)', category: 'Navigation' },
     { key: 'M', label: 'Mute / Unmute HUD Audio', category: 'Audio' },
     { key: 'F', label: 'Toggle Fullscreen Tactical HUD', category: 'Display' },
     { key: 'D', label: 'Toggle Simulation / Demo Mode', category: 'Simulation' },

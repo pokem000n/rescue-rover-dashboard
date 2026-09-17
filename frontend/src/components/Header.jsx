@@ -18,7 +18,8 @@ import {
   Maximize2,
   Minimize2,
   Sun,
-  Moon
+  Moon,
+  HelpCircle
 } from 'lucide-react';
 import { soundManager } from '../utils/soundEffects';
 
@@ -39,6 +40,7 @@ export default function Header({
   onResetTimer,
   onDurationChange,
   // Modals & HUD controls
+  onOpenGuide = () => {},
   onOpenSettings,
   onOpenHotkeys,
   onOpenDebrief,
@@ -155,6 +157,17 @@ export default function Header({
               <RotateCcw className="w-2.5 h-2.5" />
             </button>
           </div>
+
+          {/* Quick Operator Guide / নির্দেশিকা */}
+          <button
+            onClick={() => { soundManager.playChirp(); onOpenGuide(); }}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#00c2cb]/15 hover:bg-[#00c2cb]/25 border border-[#00c2cb]/40 text-[#00c2cb] font-bold transition-all shadow-[0_0_12px_rgba(0,194,203,0.15)]"
+            title="Open Quick Operator Guide / ব্যবহার নির্দেশিকা"
+          >
+            <HelpCircle className="w-3.5 h-3.5" />
+            <span className="hidden md:inline font-sans text-xs">GUIDE / নির্দেশিকা</span>
+            <span className="md:hidden font-mono text-[11px]">GUIDE</span>
+          </button>
 
           {/* Mission Debrief Report Button */}
           <button
