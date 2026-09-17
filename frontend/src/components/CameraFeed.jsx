@@ -26,50 +26,58 @@ export default function CameraFeed({ isDemoMode }) {
   const containerRef = useRef(null);
   const peerRef = useRef(null);
 
-  const [roomCode, setRoomCode] = useState('');
-  const [peerReady, setPeerReady] = useState(false);
+  // Generate a clean, instant room code that never blocks or waits
+  const [roomCode] = useState(() => {
+    const existing = sessionStorage.getItem('rover_channel_id');
+    if (existing) return existing;
+    const newId = 'uiu-' + Math.random().toString(36).substring(2, 7);
+    sessionStorage.setItem('rover_channel_id', newId);
+    return newId;
+  });
+
   const [streamStatus, setStreamStatus] = useState('waiting'); // 'waiting' | 'connecting' | 'connected'
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showPairModal, setShowPairModal] = useState(false);
-  const [statusMessage, setStatusMessage] = useState('Waiting for mobile phone connection...');
+  const [statusMessage, setStatusMessage] = useState('Waiting for phone connection...');
+
+  // Pairing URL is always ready instantly
+  const mobileUrl = typeof window !== 'undefined' 
+    ? `${window.location.origin}/camera?room=${roomCode}` 
+    : '';
 
   useEffect(() => {
     let peerInstance = null;
 
     try {
-      // Let PeerJS cloud automatically assign a guaranteed-unique ID
-      peerInstance = new Peer({
+      // Connect to PeerJS with the generated roomCode
+      peerInstance = new Peer(roomCode, {
         config: {
           iceServers: ICE_SERVERS
         }
       });
       peerRef.current = peerInstance;
 
-      peerInstance.on('open', (assignedId) => {
-        console.log('[CameraFeed] PeerJS cloud assigned ID:', assignedId);
-        setRoomCode(assignedId);
-        setPeerReady(true);
+      peerInstance.on('open', (id) => {
+        console.log('[CameraFeed] Live channel ready:', id);
       });
 
       peerInstance.on('call', (call) => {
-        console.log('[CameraFeed] INCOMING CALL FROM PHONE!');
+        console.log('[CameraFeed] Incoming mobile camera call!');
         setStreamStatus('connecting');
         setStatusMessage('Connecting live video feed...');
 
-        // Answer call
         call.answer();
 
         call.on('stream', (remoteStream) => {
-          console.log('[CameraFeed] Remote video stream received!', remoteStream);
+          console.log('[CameraFeed] Stream received:', remoteStream);
           if (videoRef.current) {
             videoRef.current.srcObject = remoteStream;
             videoRef.current.muted = true;
             videoRef.current.play().then(() => {
-              console.log('[CameraFeed] Video playing!');
               setStreamStatus('connected');
-              setStatusMessage('Live stream active');
+              setStatusMessage('Live feed active');
             }).catch(e => {
-              console.warn('[CameraFeed] Autoplay warning:', e);
+              console.warn('Play error:', e);
               setStreamStatus('connected');
             });
           }
@@ -77,22 +85,21 @@ export default function CameraFeed({ isDemoMode }) {
         });
 
         call.on('close', () => {
-          console.log('[CameraFeed] Call closed');
           setStreamStatus('waiting');
-          setStatusMessage('Phone disconnected. Ready for new stream.');
+          setStatusMessage('Phone disconnected');
         });
 
         call.on('error', (err) => {
-          console.warn('[CameraFeed] Call error:', err);
+          console.warn('Call error:', err);
           setStreamStatus('waiting');
         });
       });
 
       peerInstance.on('error', (err) => {
-        console.warn('[CameraFeed] Peer error:', err);
+        console.warn('[CameraFeed] Peer status:', err);
       });
     } catch (err) {
-      console.error('[CameraFeed] Peer init error:', err);
+      console.error('[CameraFeed] Init error:', err);
     }
 
     return () => {
@@ -100,17 +107,13 @@ export default function CameraFeed({ isDemoMode }) {
         peerInstance.destroy();
       }
     };
-  }, []);
-
-  const mobileUrl = roomCode 
-    ? `${window.location.origin}/camera?room=${roomCode}` 
-    : `${window.location.origin}/camera`;
+  }, [roomCode]);
 
   const toggleFullscreen = () => {
     if (!containerRef.current) return;
     if (!document.fullscreenElement) {
       containerRef.current.requestFullscreen().catch(err => {
-        console.warn('Error attempting fullscreen:', err);
+        console.warn('Fullscreen error:', err);
       });
       setIsFullscreen(true);
     } else {
@@ -124,7 +127,7 @@ export default function CameraFeed({ isDemoMode }) {
       videoRef.current.srcObject = null;
     }
     setStreamStatus('waiting');
-    setStatusMessage('Stream reset. Waiting for phone...');
+    setStatusMessage('Waiting for smartphone connection...');
   };
 
   const isLive = streamStatus === 'connected';
@@ -246,16 +249,14 @@ export default function CameraFeed({ isDemoMode }) {
                   <span>PAIR PHONE CAMERA</span>
                 </button>
 
-                {roomCode && (
-                  <a
-                    href={`/camera?room=${roomCode}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="px-3 py-2 rounded-xl bg-rover-card hover:bg-rover-border border border-rover-border text-slate-300 text-xs font-mono flex items-center gap-1.5 transition-colors"
-                  >
-                    <span>TEST IN NEW TAB</span>
-                  </a>
-                )}
+                <a
+                  href={`/camera?room=${roomCode}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-3 py-2 rounded-xl bg-rover-card hover:bg-rover-border border border-rover-border text-slate-300 text-xs font-mono flex items-center gap-1.5 transition-colors"
+                >
+                  <span>TEST IN NEW TAB</span>
+                </a>
               </div>
             </div>
 
@@ -277,7 +278,7 @@ export default function CameraFeed({ isDemoMode }) {
 
             <div className="flex justify-between items-end">
               <div className="bg-black/60 backdrop-blur px-2.5 py-1 rounded border border-cyan-500/30">
-                <span>CHANNEL: {roomCode.slice(0, 8)}...</span>
+                <span>CHANNEL: {roomCode}</span>
               </div>
               <div className="bg-black/60 backdrop-blur px-2.5 py-1 rounded border border-cyan-500/30">
                 <span>UIU ROVER CAM 01</span>
@@ -311,32 +312,23 @@ export default function CameraFeed({ isDemoMode }) {
               </p>
             </div>
 
-            {/* QR Code Display */}
-            {peerReady && roomCode ? (
-              <div className="flex justify-center p-4 bg-white rounded-2xl border-2 border-cyan-400 shadow-lg mx-auto w-fit">
-                <QRCodeSVG 
-                  value={mobileUrl} 
-                  size={180}
-                  bgColor="#ffffff"
-                  fgColor="#0a0d14"
-                  level="M"
-                />
-              </div>
-            ) : (
-              <div className="h-44 flex flex-col items-center justify-center text-cyan-400 font-mono text-xs">
-                <Loader2 className="w-8 h-8 animate-spin mb-2" />
-                <span>Connecting to cloud signaling broker...</span>
-              </div>
-            )}
+            {/* Instant QR Code Display (Never blocks or spins) */}
+            <div className="flex justify-center p-4 bg-white rounded-2xl border-2 border-cyan-400 shadow-lg mx-auto w-fit">
+              <QRCodeSVG 
+                value={mobileUrl} 
+                size={180}
+                bgColor="#ffffff"
+                fgColor="#0a0d14"
+                level="M"
+              />
+            </div>
 
-            {roomCode && (
-              <div className="mt-4 text-center">
-                <span className="text-[11px] font-mono text-slate-400">ROVER CHANNEL ID: </span>
-                <span className="text-xs font-mono font-bold text-cyan-300 px-2 py-0.5 bg-black/50 rounded border border-cyan-500/30 select-all">
-                  {roomCode}
-                </span>
-              </div>
-            )}
+            <div className="mt-4 text-center">
+              <span className="text-[11px] font-mono text-slate-400">ROVER CHANNEL ID: </span>
+              <span className="text-xs font-mono font-bold text-cyan-300 px-2 py-0.5 bg-black/50 rounded border border-cyan-500/30 select-all uppercase">
+                {roomCode}
+              </span>
+            </div>
 
             {/* Instructions */}
             <div className="mt-4 space-y-2 text-xs text-slate-300 font-mono">
