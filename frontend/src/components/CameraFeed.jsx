@@ -7,63 +7,81 @@ import {
   RefreshCw, 
   X, 
   Video,
-  Radio
+  Radio,
+  CheckCircle2,
+  Loader2
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Peer } from 'peerjs';
-import { WebRTCViewer } from '../services/webrtc';
-import { wsClient } from '../services/websocket';
+
+const ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'stun:stun.cloudflare.com:3478' }
+];
 
 export default function CameraFeed({ isDemoMode }) {
   const videoRef = useRef(null);
   const containerRef = useRef(null);
-  const viewerRef = useRef(null);
   const peerRef = useRef(null);
 
-  // Generate a short 5-letter session code for direct peer connection
-  const [roomCode] = useState(() => {
-    const existing = sessionStorage.getItem('rover_cam_room');
-    if (existing) return existing;
-    const code = 'rvr-' + Math.random().toString(36).substring(2, 7);
-    sessionStorage.setItem('rover_cam_room', code);
-    return code;
-  });
-
-  const [streamStatus, setStreamStatus] = useState('waiting'); // 'waiting' | 'negotiating' | 'connected'
+  const [roomCode, setRoomCode] = useState('');
+  const [peerReady, setPeerReady] = useState(false);
+  const [streamStatus, setStreamStatus] = useState('waiting'); // 'waiting' | 'connecting' | 'connected'
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showPairModal, setShowPairModal] = useState(false);
-  const [mobileUrl, setMobileUrl] = useState('');
+  const [statusMessage, setStatusMessage] = useState('Waiting for mobile phone connection...');
 
   useEffect(() => {
-    // Generate pairing URL with room code
-    const origin = window.location.origin;
-    const pairingUrl = `${origin}/camera?room=${roomCode}`;
-    setMobileUrl(pairingUrl);
-
-    // 1. Initialize Direct PeerJS Cloud WebRTC Listener (Works on Vercel with NO backend!)
     let peerInstance = null;
+
     try {
-      peerInstance = new Peer(roomCode);
+      // Let PeerJS cloud automatically assign a guaranteed-unique ID
+      peerInstance = new Peer({
+        config: {
+          iceServers: ICE_SERVERS
+        }
+      });
       peerRef.current = peerInstance;
 
-      peerInstance.on('open', (id) => {
-        console.log('[CameraFeed] Direct PeerJS listener active with Room ID:', id);
+      peerInstance.on('open', (assignedId) => {
+        console.log('[CameraFeed] PeerJS cloud assigned ID:', assignedId);
+        setRoomCode(assignedId);
+        setPeerReady(true);
       });
 
       peerInstance.on('call', (call) => {
-        console.log('[CameraFeed] Incoming mobile camera call received!');
-        call.answer(); // Answer the call
+        console.log('[CameraFeed] INCOMING CALL FROM PHONE!');
+        setStreamStatus('connecting');
+        setStatusMessage('Connecting live video feed...');
+
+        // Answer call
+        call.answer();
+
         call.on('stream', (remoteStream) => {
-          console.log('[CameraFeed] Remote video stream playing!');
+          console.log('[CameraFeed] Remote video stream received!', remoteStream);
           if (videoRef.current) {
             videoRef.current.srcObject = remoteStream;
-            videoRef.current.play().catch(e => console.warn('Autoplay warning:', e));
-            setStreamStatus('connected');
+            videoRef.current.muted = true;
+            videoRef.current.play().then(() => {
+              console.log('[CameraFeed] Video playing!');
+              setStreamStatus('connected');
+              setStatusMessage('Live stream active');
+            }).catch(e => {
+              console.warn('[CameraFeed] Autoplay warning:', e);
+              setStreamStatus('connected');
+            });
           }
+          setStreamStatus('connected');
         });
+
         call.on('close', () => {
+          console.log('[CameraFeed] Call closed');
           setStreamStatus('waiting');
+          setStatusMessage('Phone disconnected. Ready for new stream.');
         });
+
         call.on('error', (err) => {
           console.warn('[CameraFeed] Call error:', err);
           setStreamStatus('waiting');
@@ -71,33 +89,22 @@ export default function CameraFeed({ isDemoMode }) {
       });
 
       peerInstance.on('error', (err) => {
-        console.warn('[CameraFeed] PeerJS note:', err);
+        console.warn('[CameraFeed] Peer error:', err);
       });
-    } catch (e) {
-      console.warn('[CameraFeed] PeerJS init exception:', e);
+    } catch (err) {
+      console.error('[CameraFeed] Peer init error:', err);
     }
-
-    // 2. Initialize Local WebSocket WebRTC Viewer (For local LAN testing)
-    if (videoRef.current) {
-      viewerRef.current = new WebRTCViewer(videoRef.current, (status) => {
-        setStreamStatus(status);
-      });
-      viewerRef.current.init();
-    }
-
-    // Listen for backend camera status events
-    const unsubStatus = wsClient.on('camera_status', (msg) => {
-      if (!msg.active && streamStatus !== 'connected') {
-        setStreamStatus('waiting');
-      }
-    });
 
     return () => {
-      unsubStatus();
-      if (viewerRef.current) viewerRef.current.destroy();
-      if (peerInstance) peerInstance.destroy();
+      if (peerInstance) {
+        peerInstance.destroy();
+      }
     };
-  }, [roomCode]);
+  }, []);
+
+  const mobileUrl = roomCode 
+    ? `${window.location.origin}/camera?room=${roomCode}` 
+    : `${window.location.origin}/camera`;
 
   const toggleFullscreen = () => {
     if (!containerRef.current) return;
@@ -112,11 +119,12 @@ export default function CameraFeed({ isDemoMode }) {
     }
   };
 
-  const handleResetConnection = () => {
+  const handleReset = () => {
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
     setStreamStatus('waiting');
+    setStatusMessage('Stream reset. Waiting for phone...');
   };
 
   const isLive = streamStatus === 'connected';
@@ -145,6 +153,10 @@ export default function CameraFeed({ isDemoMode }) {
                 <span className="flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 animate-pulse">
                   ● LIVE STREAM
                 </span>
+              ) : streamStatus === 'connecting' ? (
+                <span className="flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 animate-pulse">
+                  CONNECTING...
+                </span>
               ) : (
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
                   {isDemoMode ? 'SIMULATION MODE' : 'STANDBY'}
@@ -166,7 +178,7 @@ export default function CameraFeed({ isDemoMode }) {
           </button>
 
           <button
-            onClick={handleResetConnection}
+            onClick={handleReset}
             className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
             title="Reset video stream"
           >
@@ -210,15 +222,19 @@ export default function CameraFeed({ isDemoMode }) {
 
             <div className="relative z-10 max-w-md">
               <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 mx-auto flex items-center justify-center mb-3 shadow-inner">
-                <Smartphone className="w-7 h-7 animate-bounce" />
+                {streamStatus === 'connecting' ? (
+                  <Loader2 className="w-7 h-7 animate-spin text-amber-400" />
+                ) : (
+                  <Smartphone className="w-7 h-7 animate-bounce" />
+                )}
               </div>
 
               <h3 className="text-base font-bold font-tech text-slate-200 tracking-wider mb-1">
-                {isDemoMode ? 'TEST VIDEO / CAMERA STANDBY' : 'NO WIRELESS CAMERA CONNECTED'}
+                {streamStatus === 'connecting' ? 'CONNECTING PHONE STREAM...' : 'NO WIRELESS CAMERA CONNECTED'}
               </h3>
               
               <p className="text-xs text-slate-400 font-mono mb-4 leading-relaxed">
-                Connect your smartphone wirelessly to stream live inspection video directly to this dashboard.
+                {statusMessage}
               </p>
 
               <div className="flex flex-wrap justify-center gap-2">
@@ -230,14 +246,16 @@ export default function CameraFeed({ isDemoMode }) {
                   <span>PAIR PHONE CAMERA</span>
                 </button>
 
-                <a
-                  href={`/camera?room=${roomCode}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="px-3 py-2 rounded-xl bg-rover-card hover:bg-rover-border border border-rover-border text-slate-300 text-xs font-mono flex items-center gap-1.5 transition-colors"
-                >
-                  <span>TEST IN NEW TAB</span>
-                </a>
+                {roomCode && (
+                  <a
+                    href={`/camera?room=${roomCode}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3 py-2 rounded-xl bg-rover-card hover:bg-rover-border border border-rover-border text-slate-300 text-xs font-mono flex items-center gap-1.5 transition-colors"
+                  >
+                    <span>TEST IN NEW TAB</span>
+                  </a>
+                )}
               </div>
             </div>
 
@@ -259,7 +277,7 @@ export default function CameraFeed({ isDemoMode }) {
 
             <div className="flex justify-between items-end">
               <div className="bg-black/60 backdrop-blur px-2.5 py-1 rounded border border-cyan-500/30">
-                <span>ROOM: {roomCode}</span>
+                <span>CHANNEL: {roomCode.slice(0, 8)}...</span>
               </div>
               <div className="bg-black/60 backdrop-blur px-2.5 py-1 rounded border border-cyan-500/30">
                 <span>UIU ROVER CAM 01</span>
@@ -294,36 +312,45 @@ export default function CameraFeed({ isDemoMode }) {
             </div>
 
             {/* QR Code Display */}
-            <div className="flex justify-center p-4 bg-white rounded-2xl border-2 border-cyan-400 shadow-lg mx-auto w-fit">
-              <QRCodeSVG 
-                value={mobileUrl} 
-                size={180}
-                bgColor="#ffffff"
-                fgColor="#0a0d14"
-                level="M"
-              />
-            </div>
+            {peerReady && roomCode ? (
+              <div className="flex justify-center p-4 bg-white rounded-2xl border-2 border-cyan-400 shadow-lg mx-auto w-fit">
+                <QRCodeSVG 
+                  value={mobileUrl} 
+                  size={180}
+                  bgColor="#ffffff"
+                  fgColor="#0a0d14"
+                  level="M"
+                />
+              </div>
+            ) : (
+              <div className="h-44 flex flex-col items-center justify-center text-cyan-400 font-mono text-xs">
+                <Loader2 className="w-8 h-8 animate-spin mb-2" />
+                <span>Connecting to cloud signaling broker...</span>
+              </div>
+            )}
 
-            <div className="mt-4 text-center">
-              <span className="text-[11px] font-mono text-slate-400">ROVER CHANNEL CODE: </span>
-              <span className="text-xs font-mono font-bold text-cyan-300 px-2 py-0.5 bg-black/50 rounded border border-cyan-500/30">
-                {roomCode}
-              </span>
-            </div>
+            {roomCode && (
+              <div className="mt-4 text-center">
+                <span className="text-[11px] font-mono text-slate-400">ROVER CHANNEL ID: </span>
+                <span className="text-xs font-mono font-bold text-cyan-300 px-2 py-0.5 bg-black/50 rounded border border-cyan-500/30 select-all">
+                  {roomCode}
+                </span>
+              </div>
+            )}
 
             {/* Instructions */}
             <div className="mt-4 space-y-2 text-xs text-slate-300 font-mono">
               <div className="flex items-start gap-2 bg-rover-dark p-2.5 rounded-lg border border-rover-border">
                 <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-300 flex items-center justify-center font-bold flex-shrink-0">1</span>
-                <span>Open your phone's camera and <strong>scan the QR code</strong>.</span>
+                <span>Open your phone's camera and <strong>scan this QR code</strong>.</span>
               </div>
               <div className="flex items-start gap-2 bg-rover-dark p-2.5 rounded-lg border border-rover-border">
                 <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-300 flex items-center justify-center font-bold flex-shrink-0">2</span>
-                <span>Tap <strong>"START BROADCASTING"</strong> on your phone.</span>
+                <span>On your phone, tap <strong>"START BROADCASTING"</strong>.</span>
               </div>
               <div className="flex items-start gap-2 bg-rover-dark p-2.5 rounded-lg border border-rover-border">
                 <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-300 flex items-center justify-center font-bold flex-shrink-0">3</span>
-                <span>The video immediately streams to this dashboard with &lt;50ms latency!</span>
+                <span>Live video will immediately display on this screen!</span>
               </div>
             </div>
 

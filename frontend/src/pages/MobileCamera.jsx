@@ -7,16 +7,21 @@ import {
   ArrowLeft, 
   FlipHorizontal,
   Wifi,
-  WifiOff,
-  Link2
+  Loader2,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import { Peer } from 'peerjs';
-import { WebRTCBroadcaster } from '../services/webrtc';
-import { wsClient } from '../services/websocket';
+
+const ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'stun:stun.cloudflare.com:3478' }
+];
 
 export default function MobileCamera() {
   const videoRef = useRef(null);
-  const broadcasterRef = useRef(null);
   const peerRef = useRef(null);
   const callRef = useRef(null);
   const streamRef = useRef(null);
@@ -27,26 +32,12 @@ export default function MobileCamera() {
 
   const [isBroadcasting, setIsBroadcasting] = useState(false);
   const [facingMode, setFacingMode] = useState('environment'); // 'environment' (back) | 'user' (front)
-  const [broadcasterState, setBroadcasterState] = useState('idle');
-  const [wsState, setWsState] = useState('disconnected');
+  const [statusText, setStatusText] = useState('Ready to stream');
+  const [isConnectedToDashboard, setIsConnectedToDashboard] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [peerConnected, setPeerConnected] = useState(false);
 
   useEffect(() => {
-    // Attempt local WebSocket connection if available
-    wsClient.connect();
-    const unsubWs = wsClient.onStatusChange((status) => {
-      setWsState(status);
-      if (status === 'connected') {
-        wsClient.send({
-          type: 'register',
-          role: 'camera_broadcaster'
-        });
-      }
-    });
-
     return () => {
-      unsubWs();
       cleanup();
     };
   }, []);
@@ -60,25 +51,27 @@ export default function MobileCamera() {
       peerRef.current.destroy();
       peerRef.current = null;
     }
-    if (broadcasterRef.current) {
-      broadcasterRef.current.stop();
-      broadcasterRef.current = null;
-    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop());
       streamRef.current = null;
     }
-    setPeerConnected(false);
+    setIsConnectedToDashboard(false);
+    setIsBroadcasting(false);
   };
 
   const handleStartBroadcast = async () => {
     setErrorMessage('');
     if (!videoRef.current) return;
 
-    try {
-      setBroadcasterState('requesting_camera');
+    if (!targetRoom) {
+      setErrorMessage('Please enter or scan the Dashboard Channel ID first.');
+      return;
+    }
 
-      // 1. Access phone camera
+    try {
+      setStatusText('Opening phone camera...');
+
+      // 1. Get phone camera
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: facingMode },
@@ -92,61 +85,61 @@ export default function MobileCamera() {
       videoRef.current.srcObject = stream;
       await videoRef.current.play().catch(e => console.warn('Play:', e));
 
-      // 2. Connect via PeerJS (Direct P2P WebRTC - Works on Vercel without backend!)
-      if (targetRoom) {
-        console.log('[MobileCamera] Connecting to PeerJS Cloud for Room:', targetRoom);
-        const peer = new Peer();
-        peerRef.current = peer;
-
-        peer.on('open', (id) => {
-          console.log('[MobileCamera] Peer open with client ID:', id);
-          console.log('[MobileCamera] Calling dashboard room:', targetRoom);
-          const call = peer.call(targetRoom, stream);
-          callRef.current = call;
-
-          setPeerConnected(true);
-          setBroadcasterState('broadcasting');
-
-          call.on('close', () => {
-            console.log('[MobileCamera] Call closed');
-            setPeerConnected(false);
-          });
-
-          call.on('error', (err) => {
-            console.warn('[MobileCamera] Call error:', err);
-          });
-        });
-
-        peer.on('error', (err) => {
-          console.warn('[MobileCamera] Peer error:', err);
-          // If room doesn't match or network issue
-          if (err.type === 'peer-unavailable') {
-            setErrorMessage(`Room "${targetRoom}" not found on dashboard. Make sure the dashboard tab is open!`);
-          }
-        });
-      }
-
-      // 3. Also dispatch via local WebSocket if connected
-      if (wsState === 'connected') {
-        broadcasterRef.current = new WebRTCBroadcaster(videoRef.current, (state) => {
-          console.log('[MobileCamera] WS WebRTC state:', state);
-        });
-        await broadcasterRef.current.startCamera(facingMode);
-      }
-
       setIsBroadcasting(true);
+      setStatusText('Connecting to cloud broker...');
+
+      // 2. Connect PeerJS
+      const peer = new Peer({
+        config: {
+          iceServers: ICE_SERVERS
+        }
+      });
+      peerRef.current = peer;
+
+      peer.on('open', (myId) => {
+        console.log('[MobileCamera] Connected to PeerJS cloud with ID:', myId);
+        setStatusText(`Calling Dashboard (${targetRoom.slice(0, 8)}...)...`);
+
+        const call = peer.call(targetRoom, stream);
+        callRef.current = call;
+
+        // When call is connected
+        setIsConnectedToDashboard(true);
+        setStatusText('STREAMING LIVE TO DASHBOARD');
+
+        call.on('close', () => {
+          console.log('[MobileCamera] Call closed');
+          setIsConnectedToDashboard(false);
+          setStatusText('Dashboard disconnected');
+        });
+
+        call.on('error', (err) => {
+          console.error('[MobileCamera] Call error:', err);
+          setErrorMessage('Failed to connect to dashboard. Make sure the dashboard tab is open!');
+          setIsConnectedToDashboard(false);
+        });
+      });
+
+      peer.on('error', (err) => {
+        console.error('[MobileCamera] Peer error:', err);
+        if (err.type === 'peer-unavailable') {
+          setErrorMessage(`Dashboard ID not found! Ensure the dashboard page is open in your computer browser.`);
+        } else {
+          setErrorMessage(`Network note: ${err.message || err.type}`);
+        }
+        setIsConnectedToDashboard(false);
+      });
+
     } catch (err) {
       console.error('Camera start failed:', err);
       setErrorMessage(err.message || 'Camera permission denied or camera not found.');
-      setIsBroadcasting(false);
-      setBroadcasterState('idle');
+      cleanup();
     }
   };
 
   const handleStopBroadcast = () => {
     cleanup();
-    setIsBroadcasting(false);
-    setBroadcasterState('idle');
+    setStatusText('Broadcast stopped');
   };
 
   const handleFlipCamera = async () => {
@@ -178,19 +171,21 @@ export default function MobileCamera() {
               ROVER CAM BROADCASTER
             </h1>
             <span className="text-[10px] font-mono text-slate-400">
-              {targetRoom ? `LINKED TO CHANNEL: ${targetRoom}` : 'DIRECT WIRELESS STREAM'}
+              UIU RESCUE ROVER WIRELESS LINK
             </span>
           </div>
         </div>
 
-        {/* Connection status indicator */}
-        <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-mono border ${
-          peerConnected || wsState === 'connected'
+        {/* Live status badge */}
+        <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-mono border font-semibold ${
+          isConnectedToDashboard
             ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' 
-            : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+            : isBroadcasting
+            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+            : 'bg-slate-800 text-slate-400 border-slate-700'
         }`}>
-          <Wifi className="w-3 h-3" />
-          <span>{peerConnected ? 'STREAMING' : 'READY'}</span>
+          <Radio className={`w-3 h-3 ${isConnectedToDashboard ? 'animate-pulse text-emerald-400' : ''}`} />
+          <span>{isConnectedToDashboard ? 'TRANSMITTING' : isBroadcasting ? 'CONNECTING' : 'IDLE'}</span>
         </div>
       </header>
 
@@ -220,21 +215,18 @@ export default function MobileCamera() {
               Stream live video from this phone directly to the UIU Rescue Rover mission control dashboard.
             </p>
 
-            {/* Room Code field if not pre-filled */}
+            {/* Room Code input */}
             <div className="mb-5 bg-rover-panel/80 p-3 rounded-xl border border-rover-border text-left">
               <label className="text-[10px] font-mono text-slate-400 block mb-1">
-                DASHBOARD CHANNEL CODE:
+                DASHBOARD CHANNEL ID:
               </label>
-              <div className="flex items-center gap-2">
-                <Link2 className="w-4 h-4 text-cyan-400 shrink-0" />
-                <input
-                  type="text"
-                  value={targetRoom}
-                  onChange={(e) => setTargetRoom(e.target.value.trim().toLowerCase())}
-                  placeholder="e.g. rvr-abcde"
-                  className="bg-rover-dark border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-cyan-300 w-full focus:outline-none focus:border-cyan-400 uppercase"
-                />
-              </div>
+              <input
+                type="text"
+                value={targetRoom}
+                onChange={(e) => setTargetRoom(e.target.value.trim())}
+                placeholder="Scanned from QR code"
+                className="bg-rover-dark border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-cyan-300 w-full focus:outline-none focus:border-cyan-400"
+              />
             </div>
 
             <button
@@ -254,15 +246,17 @@ export default function MobileCamera() {
               <div className="bg-black/60 backdrop-blur px-2.5 py-1 rounded border border-cyan-500/30 text-cyan-300">
                 LENS: {facingMode === 'environment' ? 'REAR WIDE' : 'FRONT'}
               </div>
-              <div className="bg-rose-500/80 backdrop-blur px-2.5 py-1 rounded text-white font-bold flex items-center gap-1.5 animate-pulse">
+              <div className={`backdrop-blur px-2.5 py-1 rounded font-bold flex items-center gap-1.5 ${
+                isConnectedToDashboard ? 'bg-rose-500/80 text-white animate-pulse' : 'bg-amber-500/80 text-black'
+              }`}>
                 <Radio className="w-3.5 h-3.5" />
-                <span>ON AIR</span>
+                <span>{isConnectedToDashboard ? 'LIVE ON AIR' : 'CALLING...'}</span>
               </div>
             </div>
 
             <div className="flex justify-between items-end">
-              <div className="bg-black/60 backdrop-blur px-2.5 py-1 rounded border border-white/20 text-slate-300">
-                CHANNEL: {targetRoom || 'DIRECT'}
+              <div className="bg-black/70 backdrop-blur px-2.5 py-1 rounded border border-white/20 text-slate-200">
+                {statusText}
               </div>
             </div>
           </div>
@@ -283,7 +277,7 @@ export default function MobileCamera() {
           <button
             onClick={handleFlipCamera}
             className="p-3.5 rounded-2xl bg-slate-800 text-cyan-400 border border-slate-700 active:scale-90 transition-transform"
-            title="Switch between front and back camera"
+            title="Switch front/back camera"
           >
             <FlipHorizontal className="w-6 h-6" />
           </button>
