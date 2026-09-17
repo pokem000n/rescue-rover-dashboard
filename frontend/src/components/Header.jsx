@@ -16,7 +16,9 @@ import {
   Keyboard,
   Award,
   Maximize2,
-  Minimize2
+  Minimize2,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { soundManager } from '../utils/soundEffects';
 
@@ -41,7 +43,10 @@ export default function Header({
   onOpenHotkeys,
   onOpenDebrief,
   isFullscreen = false,
-  onToggleFullscreen
+  onToggleFullscreen,
+  // Theme Toggle
+  theme = 'dark',
+  onToggleTheme = () => {}
 }) {
   const [isMuted, setIsMuted] = useState(false);
 
@@ -59,7 +64,11 @@ export default function Header({
   };
 
   return (
-    <header className="border-b border-[#162338] bg-[#0a0f18]/95 backdrop-blur-md sticky top-0 z-30 px-4 lg:px-6 py-2.5 shadow-2xl shadow-black/40 print:hidden">
+    <header className={`border-b sticky top-0 z-30 px-4 lg:px-6 py-2.5 shadow-2xl transition-colors print:hidden ${
+      theme === 'light'
+        ? 'bg-white/95 border-slate-200 shadow-slate-200/50 text-slate-800'
+        : 'border-[#162338] bg-[#0a0f18]/95 shadow-black/40 text-white'
+    }`}>
       <div className="max-w-7xl mx-auto flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3">
         
         {/* Official UIU Rescue Rover Team (#URRT) Brand */}
@@ -74,14 +83,16 @@ export default function Header({
               />
             </div>
             {/* Live Hardware Status Pip */}
-            <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#0a0f18] ${
-              esp32Online ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'
-            }`} />
+            <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 ${
+              theme === 'light' ? 'border-white' : 'border-[#0a0f18]'
+            } ${esp32Online ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}`} />
           </div>
 
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-lg md:text-xl font-bold font-tech tracking-wider text-white drop-shadow-sm">
+              <h1 className={`text-lg md:text-xl font-bold font-tech tracking-wider drop-shadow-sm ${
+                theme === 'light' ? 'text-slate-900' : 'text-white'
+              }`}>
                 UIU RESCUE ROVER TEAM
               </h1>
               <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-[#00c2cb]/15 border border-[#00c2cb]/40 text-[#00c2cb] tracking-wider">
@@ -102,9 +113,11 @@ export default function Header({
           {/* RoboCup Round Countdown Timer */}
           <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border ${
             matchSeconds <= 60
-              ? 'bg-rose-500/20 border-rose-500/50 text-rose-300 animate-pulse'
+              ? 'bg-rose-500/20 border-rose-500/50 text-rose-400 animate-pulse'
               : matchSeconds <= 180
-              ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+              ? 'bg-amber-500/15 border-amber-500/40 text-amber-400'
+              : theme === 'light'
+              ? 'bg-slate-50 border-slate-200 text-slate-800'
               : 'bg-[#0f1624] border-[#162338] text-white'
           }`}>
             <Timer className={`w-3.5 h-3.5 ${matchSeconds <= 60 ? 'text-rose-400' : 'text-[#00c2cb]'}`} />
@@ -116,12 +129,12 @@ export default function Header({
               className="bg-transparent text-[11px] font-mono text-[#00c2cb] focus:outline-none cursor-pointer border-r border-[#162338] pr-1 mr-0.5 hover:text-cyan-300 transition-colors"
               title="Select Match Round Duration"
             >
-              <option value={300} className="bg-[#0a0f18] text-white">5m</option>
-              <option value={480} className="bg-[#0a0f18] text-white">8m (Official)</option>
-              <option value={600} className="bg-[#0a0f18] text-white">10m</option>
-              <option value={720} className="bg-[#0a0f18] text-white">12m</option>
-              <option value={900} className="bg-[#0a0f18] text-white">15m</option>
-              <option value={1200} className="bg-[#0a0f18] text-white">20m</option>
+              <option value={300} className={theme === 'light' ? 'bg-white text-slate-900' : 'bg-[#0a0f18] text-white'}>5m</option>
+              <option value={480} className={theme === 'light' ? 'bg-white text-slate-900' : 'bg-[#0a0f18] text-white'}>8m (Official)</option>
+              <option value={600} className={theme === 'light' ? 'bg-white text-slate-900' : 'bg-[#0a0f18] text-white'}>10m</option>
+              <option value={720} className={theme === 'light' ? 'bg-white text-slate-900' : 'bg-[#0a0f18] text-white'}>12m</option>
+              <option value={900} className={theme === 'light' ? 'bg-white text-slate-900' : 'bg-[#0a0f18] text-white'}>15m</option>
+              <option value={1200} className={theme === 'light' ? 'bg-white text-slate-900' : 'bg-[#0a0f18] text-white'}>20m</option>
             </select>
 
             <span className="font-bold text-sm tracking-wider">
@@ -129,14 +142,14 @@ export default function Header({
             </span>
             <button
               onClick={onToggleTimer}
-              className="p-1 rounded-md hover:bg-white/10 text-slate-300 transition-colors ml-0.5"
+              className="p-1 rounded-md hover:bg-black/10 text-slate-400 hover:text-[#00c2cb] transition-colors ml-0.5"
               title={timerActive ? 'Pause match timer (Space)' : 'Start match timer (Space)'}
             >
               {timerActive ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3 text-[#00c2cb]" />}
             </button>
             <button
               onClick={onResetTimer}
-              className="p-1 rounded-md hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+              className="p-1 rounded-md hover:bg-black/10 text-slate-400 hover:text-slate-600 transition-colors"
               title={`Reset timer to ${formatTimer(initialDuration)}`}
             >
               <RotateCcw className="w-2.5 h-2.5" />
@@ -146,7 +159,7 @@ export default function Header({
           {/* Mission Debrief Report Button */}
           <button
             onClick={onOpenDebrief}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 transition-colors font-semibold"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-500 font-bold transition-colors"
             title="Open Mission Debrief & Judges Report (R)"
           >
             <Award className="w-3.5 h-3.5" />
@@ -156,7 +169,9 @@ export default function Header({
           {/* Alert Thresholds Settings Button */}
           <button
             onClick={onOpenSettings}
-            className="p-1.5 rounded-xl bg-[#0f1624] hover:bg-slate-800 border border-[#162338] text-slate-300 hover:text-[#00c2cb] transition-colors"
+            className={`p-1.5 rounded-xl border transition-colors ${
+              theme === 'light' ? 'bg-slate-50 border-slate-200 text-slate-600 hover:text-[#00c2cb]' : 'bg-[#0f1624] border-[#162338] text-slate-300 hover:text-[#00c2cb]'
+            }`}
             title="Configure Hazard Alert Thresholds"
           >
             <Sliders className="w-3.5 h-3.5" />
@@ -165,7 +180,9 @@ export default function Header({
           {/* Hotkeys Cheatsheet Button */}
           <button
             onClick={onOpenHotkeys}
-            className="p-1.5 rounded-xl bg-[#0f1624] hover:bg-slate-800 border border-[#162338] text-slate-300 hover:text-[#00c2cb] transition-colors"
+            className={`p-1.5 rounded-xl border transition-colors ${
+              theme === 'light' ? 'bg-slate-50 border-slate-200 text-slate-600 hover:text-[#00c2cb]' : 'bg-[#0f1624] border-[#162338] text-slate-300 hover:text-[#00c2cb]'
+            }`}
             title="Tactical Keyboard Shortcuts (?)"
           >
             <Keyboard className="w-3.5 h-3.5" />
@@ -174,10 +191,25 @@ export default function Header({
           {/* Fullscreen HUD Toggle */}
           <button
             onClick={onToggleFullscreen}
-            className="p-1.5 rounded-xl bg-[#0f1624] hover:bg-slate-800 border border-[#162338] text-slate-300 hover:text-[#00c2cb] transition-colors"
+            className={`p-1.5 rounded-xl border transition-colors ${
+              theme === 'light' ? 'bg-slate-50 border-slate-200 text-slate-600 hover:text-[#00c2cb]' : 'bg-[#0f1624] border-[#162338] text-slate-300 hover:text-[#00c2cb]'
+            }`}
             title="Toggle Fullscreen HUD (F)"
           >
             {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+          </button>
+
+          {/* Theme Toggle (Dark Mode / Light Arena Day Mode) */}
+          <button
+            onClick={() => { soundManager.playChirp(); onToggleTheme(); }}
+            className={`p-1.5 rounded-xl border transition-colors ${
+              theme === 'light'
+                ? 'bg-amber-500/15 border-amber-500/30 text-amber-500 hover:bg-amber-500/25'
+                : 'bg-[#0f1624] border-[#162338] text-slate-300 hover:text-amber-400'
+            }`}
+            title={theme === 'dark' ? 'Switch to High-Visibility Light / Day Mode' : 'Switch to Tactical Dark Mode'}
+          >
+            {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
           </button>
 
           {/* Audio Mute/Unmute Toggle */}
@@ -185,7 +217,7 @@ export default function Header({
             onClick={toggleSound}
             className={`p-1.5 rounded-xl border transition-colors ${
               isMuted 
-                ? 'bg-slate-900 border-slate-800 text-slate-500' 
+                ? 'bg-slate-800 border-slate-700 text-slate-500' 
                 : 'bg-[#00c2cb]/10 border-[#00c2cb]/30 text-[#00c2cb]'
             }`}
             title={isMuted ? 'Unmute HUD Audio (M)' : 'Mute HUD Audio (M)'}

@@ -69,6 +69,32 @@ export default function Dashboard({ onNavigateToCamera }) {
   const [matchSeconds, setMatchSeconds] = useState(480);
   const [timerActive, setTimerActive] = useState(false);
 
+  // High-Visibility Light / Tactical Dark Mode
+  const [theme, setTheme] = useState(() => {
+    try {
+      return localStorage.getItem('urrt_theme') || 'dark';
+    } catch (e) {
+      return 'dark';
+    }
+  });
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      if (theme === 'light') {
+        document.body.classList.add('light-theme');
+      } else {
+        document.body.classList.remove('light-theme');
+      }
+      try {
+        localStorage.setItem('urrt_theme', theme);
+      } catch (e) {}
+    }
+  }, [theme]);
+
+  const handleToggleTheme = () => {
+    setTheme(t => t === 'dark' ? 'light' : 'dark');
+  };
+
   // Demo Simulation Mode state
   const [isDemoMode, setIsDemoMode] = useState(() => {
     return import.meta.env.VITE_DEMO_MODE === 'true';
@@ -360,7 +386,9 @@ export default function Dashboard({ onNavigateToCamera }) {
   };
 
   return (
-    <div className="min-h-screen bg-[#06090e] text-slate-100 flex flex-col selection:bg-[#00c2cb] selection:text-black">
+    <div className={`min-h-screen flex flex-col selection:bg-[#00c2cb] selection:text-black transition-colors ${
+      theme === 'light' ? 'bg-[#f1f5f9] text-slate-900' : 'bg-[#06090e] text-slate-100'
+    }`}>
       
       {/* Tactical Top Mission Header */}
       <Header 
@@ -385,6 +413,8 @@ export default function Dashboard({ onNavigateToCamera }) {
         onOpenDebrief={() => { soundManager.playChirp(); setShowDebriefModal(true); }}
         isFullscreen={isFullscreen}
         onToggleFullscreen={toggleFullscreen}
+        theme={theme}
+        onToggleTheme={handleToggleTheme}
       />
 
       {/* Main Mission Control Grid */}
@@ -426,7 +456,7 @@ export default function Dashboard({ onNavigateToCamera }) {
 
           </div>
 
-          {/* Right Column: Wireless Mobile Camera Feed (5 Cols) */}
+          {/* Right Column: Multi-Camera Wireless Feed (5 Cols) */}
           <div className="lg:col-span-5 h-full">
             <CameraFeed 
               isDemoMode={isDemoMode}
@@ -434,6 +464,7 @@ export default function Dashboard({ onNavigateToCamera }) {
               humidity={humidity}
               triggerSnapshot={triggerSnapshot}
               onSnapshotsCountChange={setSnapshotsCount}
+              theme={theme}
             />
           </div>
 
@@ -478,7 +509,9 @@ export default function Dashboard({ onNavigateToCamera }) {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-[#162338] py-4 px-6 bg-[#0a0f18]/90 text-center font-mono text-xs text-slate-400 flex items-center justify-center gap-2.5 print:hidden">
+      <footer className={`border-t py-4 px-6 text-center font-mono text-xs flex items-center justify-center gap-2.5 print:hidden transition-colors ${
+        theme === 'light' ? 'bg-white border-slate-200 text-slate-600' : 'bg-[#0a0f18]/90 border-[#162338] text-slate-400'
+      }`}>
         <img src="/urrt-logo.png" alt="URRT Logo" className="w-5 h-5 rounded-full border border-[#00c2cb]/40" />
         <span>UIU RESCUE ROVER TEAM (#URRT) • ROBOCUP RESCUE MISSION CONTROL SYSTEM</span>
       </footer>

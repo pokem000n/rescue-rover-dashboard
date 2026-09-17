@@ -30,6 +30,16 @@ export default function MobileCamera() {
     return new URLSearchParams(window.location.search).get('room') || '';
   });
 
+  const [camRole] = useState(() => {
+    return new URLSearchParams(window.location.search).get('cam') || '1';
+  });
+
+  const [camName] = useState(() => {
+    const raw = new URLSearchParams(window.location.search).get('name');
+    if (raw) return decodeURIComponent(raw);
+    return camRole === '2' ? 'ARM / INSPECTION' : camRole === '3' ? 'REAR / PANORAMIC' : 'DRIVE / FRONT';
+  });
+
   const [isBroadcasting, setIsBroadcasting] = useState(false);
   const [facingMode, setFacingMode] = useState('environment'); // 'environment' (back) | 'user' (front)
   const [statusText, setStatusText] = useState('Ready to stream');
@@ -185,7 +195,7 @@ export default function MobileCamera() {
             <img src="/urrt-logo.png" alt="URRT Logo" className="w-8 h-8 rounded-full border border-[#00c2cb]" />
             <div>
               <h1 className="text-xs sm:text-sm font-bold font-tech tracking-wider text-white flex items-center gap-1.5">
-                ROVER CAM BROADCASTER
+                CAM 0{camRole}: {camName}
               </h1>
               <span className="text-[10px] font-mono text-[#00c2cb]">
                 UIU RESCUE ROVER TEAM • #URRT
