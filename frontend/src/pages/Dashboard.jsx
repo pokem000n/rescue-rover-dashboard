@@ -4,12 +4,19 @@ import MetricCard from '../components/MetricCard';
 import CameraFeed from '../components/CameraFeed';
 import TelemetryChart from '../components/TelemetryChart';
 import ThreatMatrix from '../components/ThreatMatrix';
+import MissionLog from '../components/MissionLog';
 import SystemInfo from '../components/SystemInfo';
 import PacketLog from '../components/PacketLog';
+
+// Modals
+import ThresholdSettingsModal from '../components/ThresholdSettingsModal';
+import HotkeysModal from '../components/HotkeysModal';
+import MissionDebriefModal from '../components/MissionDebriefModal';
 
 import { wsClient } from '../services/websocket';
 import { mockSimulator } from '../services/mockData';
 import { soundManager } from '../utils/soundEffects';
+import { loadThresholds, saveThresholds } from '../utils/thresholdSettings';
 
 const MAX_HISTORY_POINTS = 50;
 const MAX_LOG_ENTRIES = 40;
@@ -34,6 +41,34 @@ export default function Dashboard({ onNavigateToCamera }) {
   const [history, setHistory] = useState([]);
   const [logs, setLogs] = useState([]);
 
+  // Configurable Alert Thresholds
+  const [thresholds, setThresholds] = useState(() => loadThresholds());
+
+  // Mission Incidents Logbook State
+  const [incidents, setIncidents] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('urrt_mission_incidents');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  // Snapshots count & trigger
+  const [snapshotsCount, setSnapshotsCount] = useState(0);
+  const [triggerSnapshot, setTriggerSnapshot] = useState(0);
+
+  // Modals visibility state
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showHotkeysModal, setShowHotkeysModal] = useState(false);
+  const [showDebriefModal, setShowDebriefModal] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Match Countdown Timer State
+  const [initialDuration, setInitialDuration] = useState(480); // 8:00 default
+  const [matchSeconds, setMatchSeconds] = useState(480);
+  const [timerActive, setTimerActive] = useState(false);
+
   // Demo Simulation Mode state
   const [isDemoMode, setIsDemoMode] = useState(() => {
     return import.meta.env.VITE_DEMO_MODE === 'true';
@@ -41,6 +76,102 @@ export default function Dashboard({ onNavigateToCamera }) {
   const [isSimulatedOnline, setIsSimulatedOnline] = useState(true);
 
   const lastAlarmTimeRef = useRef(0);
+
+  // Timer countdown loop
+  useEffect(() => {
+    let interval = null;
+    if (timerActive && matchSeconds > 0) {
+      interval = setInterval(() => {
+        setMatchSeconds(sec => {
+          if (sec <= 1) {
+            setTimerActive(false);
+            soundManager.playHazardAlarm();
+            // Automatically open post-match debrief report when match time expires!
+            setTimeout(() => setShowDebriefModal(true), 1200);
+            return 0;
+          }
+          if (sec === 60 || sec === 30 || sec === 10) {
+            soundManager.playHazardAlarm();
+          }
+          return sec - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [timerActive, matchSeconds]);
+
+  const handleToggleTimer = () => {
+    soundManager.playChirp();
+    setTimerActive(t => !t);
+  };
+
+  const handleResetTimer = () => {
+    soundManager.playChirp();
+    setTimerActive(false);
+    setMatchSeconds(initialDuration);
+  };
+
+  const handleDurationChange = (e) => {
+    const newSec = parseInt(e.target.value, 10);
+    setInitialDuration(newSec);
+    setTimerActive(false);
+    setMatchSeconds(newSec);
+    soundManager.playChirp();
+  };
+
+  // Save incidents to sessionStorage
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('urrt_mission_incidents', JSON.stringify(incidents));
+    } catch (e) {}
+  }, [incidents]);
+
+  const handleAddIncident = (incidentData) => {
+    const newRecord = {
+      id: Date.now(),
+      time: new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      ...incidentData
+    };
+    setIncidents(prev => [newRecord, ...prev]);
+  };
+
+  const handleDeleteIncident = (id) => {
+    soundManager.playChirp();
+    setIncidents(prev => prev.filter(i => i.id !== id));
+  };
+
+  const handleClearIncidents = () => {
+    soundManager.playChirp();
+    setIncidents([]);
+    try { sessionStorage.removeItem('urrt_mission_incidents'); } catch (e) {}
+  };
+
+  const handleSaveThresholds = (newThresh) => {
+    setThresholds(newThresh);
+    saveThresholds(newThresh);
+  };
+
+  // Fullscreen HUD toggle
+  const toggleFullscreen = () => {
+    soundManager.playChirp();
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().then(() => {
+        setIsFullscreen(true);
+      }).catch(err => console.warn('Fullscreen error:', err));
+    } else {
+      document.exitFullscreen().then(() => {
+        setIsFullscreen(false);
+      }).catch(err => console.warn(err));
+    }
+  };
+
+  useEffect(() => {
+    const onFsChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    };
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, []);
 
   // Ingests incoming telemetry data point (from real ESP32 or Demo simulator)
   const ingestSensorData = useCallback((data) => {
@@ -50,8 +181,10 @@ export default function Dashboard({ onNavigateToCamera }) {
 
     if (isNaN(temp) || isNaN(hum)) return;
 
-    // Trigger hazard sound if extreme threshold breached (throttled to once per 10s)
-    if ((temp >= 40 || hum >= 85) && (now - lastAlarmTimeRef.current > 10000)) {
+    // Trigger hazard siren if custom thresholds breached (throttled to once per 10s)
+    const dangerT = thresholds.tempDanger || 40;
+    const dangerH = thresholds.humidityDanger || 80;
+    if ((temp >= dangerT || hum >= dangerH) && (now - lastAlarmTimeRef.current > 10000)) {
       lastAlarmTimeRef.current = now;
       soundManager.playHazardAlarm();
     }
@@ -99,11 +232,10 @@ export default function Dashboard({ onNavigateToCamera }) {
       }
       return updated;
     });
-  }, []);
+  }, [thresholds]);
 
   // Set up WebSocket listeners and lifecycle
   useEffect(() => {
-    // If in Demo Mode, use simulator instead of WebSocket
     if (isDemoMode) {
       mockSimulator.start(
         (data) => ingestSensorData(data),
@@ -118,7 +250,6 @@ export default function Dashboard({ onNavigateToCamera }) {
       };
     }
 
-    // Connect real WebSocket client
     wsClient.connect();
 
     const unsubStatus = wsClient.onStatusChange((status) => {
@@ -126,7 +257,6 @@ export default function Dashboard({ onNavigateToCamera }) {
     });
 
     const unsubInitial = wsClient.on('initial_state', (payload) => {
-      console.log('[Dashboard] Initial state received:', payload);
       if (payload.esp32) {
         setEsp32Online(Boolean(payload.esp32.online));
         if (payload.esp32.ip) setEsp32Ip(payload.esp32.ip);
@@ -144,7 +274,6 @@ export default function Dashboard({ onNavigateToCamera }) {
     });
 
     const unsubDeviceStatus = wsClient.on('device_status', (payload) => {
-      console.log('[Dashboard] Device status update:', payload);
       if (payload.device === 'esp32') {
         const isOnline = payload.status === 'online';
         setEsp32Online(isOnline);
@@ -162,6 +291,56 @@ export default function Dashboard({ onNavigateToCamera }) {
       unsubDeviceStatus();
     };
   }, [isDemoMode, ingestSensorData]);
+
+  // Tactical Operator Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Don't trigger hotkeys if user is typing in an input or textarea
+      const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
+      if (tag === 'input' || tag === 'textarea') {
+        if (e.key === 'Escape') {
+          setShowSettingsModal(false);
+          setShowHotkeysModal(false);
+          setShowDebriefModal(false);
+        }
+        return;
+      }
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+        handleToggleTimer();
+      } else if (e.code === 'KeyS') {
+        e.preventDefault();
+        setTriggerSnapshot(c => c + 1);
+      } else if (e.code === 'KeyM') {
+        e.preventDefault();
+        const next = !soundManager.isMuted();
+        soundManager.setMuted(next);
+        if (!next) soundManager.playChirp();
+      } else if (e.code === 'KeyF') {
+        e.preventDefault();
+        toggleFullscreen();
+      } else if (e.code === 'KeyD') {
+        e.preventDefault();
+        handleToggleDemoMode();
+      } else if (e.code === 'KeyR') {
+        e.preventDefault();
+        soundManager.playChirp();
+        setShowDebriefModal(prev => !prev);
+      } else if (e.key === '?' || e.code === 'KeyH') {
+        e.preventDefault();
+        soundManager.playChirp();
+        setShowHotkeysModal(prev => !prev);
+      } else if (e.key === 'Escape') {
+        setShowSettingsModal(false);
+        setShowHotkeysModal(false);
+        setShowDebriefModal(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const handleToggleDemoMode = () => {
     soundManager.playChirp();
@@ -181,7 +360,8 @@ export default function Dashboard({ onNavigateToCamera }) {
   };
 
   return (
-    <div className="min-h-screen bg-[#06090e] text-slate-100 flex flex-col">
+    <div className="min-h-screen bg-[#06090e] text-slate-100 flex flex-col selection:bg-[#00c2cb] selection:text-black">
+      
       {/* Tactical Top Mission Header */}
       <Header 
         esp32Online={esp32Online}
@@ -192,10 +372,23 @@ export default function Dashboard({ onNavigateToCamera }) {
         onToggleSimulatedRover={handleToggleSimulatedRover}
         isSimulatedOnline={isSimulatedOnline}
         onOpenMobileCamera={onNavigateToCamera}
+        // Match Timer
+        matchSeconds={matchSeconds}
+        initialDuration={initialDuration}
+        timerActive={timerActive}
+        onToggleTimer={handleToggleTimer}
+        onResetTimer={handleResetTimer}
+        onDurationChange={handleDurationChange}
+        // Action Modals & Fullscreen
+        onOpenSettings={() => { soundManager.playChirp(); setShowSettingsModal(true); }}
+        onOpenHotkeys={() => { soundManager.playChirp(); setShowHotkeysModal(true); }}
+        onOpenDebrief={() => { soundManager.playChirp(); setShowDebriefModal(true); }}
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={toggleFullscreen}
       />
 
       {/* Main Mission Control Grid */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-8 space-y-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-6 space-y-6">
         
         {/* Top Section: Metrics + Live Camera */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
@@ -203,7 +396,7 @@ export default function Dashboard({ onNavigateToCamera }) {
           {/* Left Column: Environmental Gauges & Waveforms (7 Cols) */}
           <div className="lg:col-span-7 flex flex-col space-y-6">
             
-            {/* Real-time Metric Cards */}
+            {/* Real-time Metric Cards with Custom Thresholds */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <MetricCard 
                 type="temperature"
@@ -212,6 +405,7 @@ export default function Dashboard({ onNavigateToCamera }) {
                 previousValue={prevTemperature}
                 history={history}
                 isStale={!esp32Online && temperature !== null}
+                thresholds={thresholds}
               />
 
               <MetricCard 
@@ -221,6 +415,7 @@ export default function Dashboard({ onNavigateToCamera }) {
                 previousValue={prevHumidity}
                 history={history}
                 isStale={!esp32Online && humidity !== null}
+                thresholds={thresholds}
               />
             </div>
 
@@ -233,7 +428,13 @@ export default function Dashboard({ onNavigateToCamera }) {
 
           {/* Right Column: Wireless Mobile Camera Feed (5 Cols) */}
           <div className="lg:col-span-5 h-full">
-            <CameraFeed isDemoMode={isDemoMode} />
+            <CameraFeed 
+              isDemoMode={isDemoMode}
+              temperature={temperature}
+              humidity={humidity}
+              triggerSnapshot={triggerSnapshot}
+              onSnapshotsCountChange={setSnapshotsCount}
+            />
           </div>
 
         </div>
@@ -244,7 +445,18 @@ export default function Dashboard({ onNavigateToCamera }) {
           humidity={humidity}
         />
 
-        {/* Middle Section: System Diagnostics & Health */}
+        {/* Operator Mission Incident & Milestones Logbook */}
+        <MissionLog 
+          incidents={incidents}
+          onAddIncident={handleAddIncident}
+          onDeleteIncident={handleDeleteIncident}
+          onClearIncidents={handleClearIncidents}
+          matchSeconds={matchSeconds}
+          currentTemp={temperature}
+          currentHum={humidity}
+        />
+
+        {/* System Diagnostics & Link Health */}
         <SystemInfo 
           esp32Online={esp32Online}
           esp32Ip={esp32Ip}
@@ -257,7 +469,7 @@ export default function Dashboard({ onNavigateToCamera }) {
           latestData={{ temperature, humidity }}
         />
 
-        {/* Bottom Section: Live JSON Bus Packet Log */}
+        {/* Live JSON Bus Packet Log */}
         <PacketLog 
           logs={logs}
           onClear={() => setLogs([])}
@@ -266,10 +478,36 @@ export default function Dashboard({ onNavigateToCamera }) {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-[#162338] py-4 px-6 bg-[#0a0f18]/80 text-center font-mono text-xs text-slate-400 flex items-center justify-center gap-2.5">
+      <footer className="border-t border-[#162338] py-4 px-6 bg-[#0a0f18]/90 text-center font-mono text-xs text-slate-400 flex items-center justify-center gap-2.5 print:hidden">
         <img src="/urrt-logo.png" alt="URRT Logo" className="w-5 h-5 rounded-full border border-[#00c2cb]/40" />
-        <span>UIU RESCUE ROVER TEAM (#URRT) • ROBOCUP RESCUE ROVER MISSION CONTROL</span>
+        <span>UIU RESCUE ROVER TEAM (#URRT) • ROBOCUP RESCUE MISSION CONTROL SYSTEM</span>
       </footer>
+
+      {/* Tactical Modals */}
+      <ThresholdSettingsModal 
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        currentThresholds={thresholds}
+        onSave={handleSaveThresholds}
+      />
+
+      <HotkeysModal 
+        isOpen={showHotkeysModal}
+        onClose={() => setShowHotkeysModal(false)}
+      />
+
+      <MissionDebriefModal 
+        isOpen={showDebriefModal}
+        onClose={() => setShowDebriefModal(false)}
+        initialDuration={initialDuration}
+        matchSeconds={matchSeconds}
+        history={history}
+        packetCount={packetCount}
+        incidents={incidents}
+        snapshotsCount={snapshotsCount}
+        esp32Online={esp32Online}
+      />
+
     </div>
   );
 }

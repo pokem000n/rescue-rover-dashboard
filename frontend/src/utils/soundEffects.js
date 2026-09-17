@@ -78,6 +78,31 @@ class SoundManager {
     } catch (e) {}
   }
 
+  // Mission Log incident entry chime
+  playLogPing() {
+    if (this.muted) return;
+    try {
+      this._init();
+      if (!this.ctx) return;
+      const t = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1050, t);
+      osc.frequency.setValueAtTime(1400, t + 0.05);
+
+      gain.gain.setValueAtTime(0.09, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.start(t);
+      osc.stop(t + 0.12);
+    } catch (e) {}
+  }
+
   // Hazard Alert double beep
   playHazardAlarm() {
     if (this.muted) return;

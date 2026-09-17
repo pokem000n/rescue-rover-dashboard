@@ -14,10 +14,16 @@ export default function MetricCard({
   unit,
   previousValue,
   history = [],
-  isStale = false
+  isStale = false,
+  thresholds = null
 }) {
   const isTemp = type === 'temperature';
   const numericValue = value !== null && value !== undefined ? Number(value) : null;
+
+  const tempDanger = thresholds?.tempDanger || 40;
+  const tempWarn = thresholds?.tempWarning || 35;
+  const tempMin = thresholds?.tempMinWarning || 18;
+  const humDanger = thresholds?.humidityDanger || 80;
 
   // Calculate session statistics
   const validHistory = history.map(h => isTemp ? h.temperature : h.humidity).filter(v => typeof v === 'number');
@@ -41,13 +47,13 @@ export default function MetricCard({
     if (numericValue === null) {
       gaugePercent = 0;
       statusBadge = { label: 'NO DATA', color: 'text-slate-400 bg-slate-800 border-slate-700' };
-    } else if (numericValue < 18) {
+    } else if (numericValue < tempMin) {
       statusBadge = { label: 'COOL', color: 'text-[#00c2cb] bg-[#00c2cb]/10 border-[#00c2cb]/30' };
       gaugePercent = Math.max(10, ((numericValue) / 50) * 100);
-    } else if (numericValue <= 32) {
+    } else if (numericValue <= tempWarn) {
       statusBadge = { label: 'NOMINAL', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' };
       gaugePercent = ((numericValue) / 50) * 100;
-    } else if (numericValue <= 40) {
+    } else if (numericValue <= tempDanger) {
       statusBadge = { label: 'WARM', color: 'text-amber-400 bg-amber-500/10 border-amber-500/30' };
       gaugePercent = Math.min(95, ((numericValue) / 50) * 100);
     } else {
@@ -65,7 +71,7 @@ export default function MetricCard({
     } else if (numericValue <= 65) {
       statusBadge = { label: 'OPTIMAL', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' };
       gaugePercent = numericValue;
-    } else if (numericValue <= 80) {
+    } else if (numericValue <= humDanger) {
       statusBadge = { label: 'ELEVATED', color: 'text-[#00c2cb] bg-[#00c2cb]/10 border-[#00c2cb]/30' };
       gaugePercent = numericValue;
     } else {

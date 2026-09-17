@@ -13,7 +13,12 @@ import {
   Download,
   Trash2,
   CheckCircle2,
-  Loader2
+  Loader2,
+  ZoomIn,
+  Eye,
+  FlipHorizontal,
+  Crosshair,
+  Grid
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Peer } from 'peerjs';
@@ -26,10 +31,22 @@ const ICE_SERVERS = [
   { urls: 'stun:stun.cloudflare.com:3478' }
 ];
 
-export default function CameraFeed({ isDemoMode }) {
+export default function CameraFeed({ 
+  isDemoMode,
+  temperature = null,
+  humidity = null,
+  triggerSnapshot = 0,
+  onSnapshotsCountChange = () => {}
+}) {
   const videoRef = useRef(null);
   const containerRef = useRef(null);
   const peerRef = useRef(null);
+
+  // Tactical Camera Enhancements
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [isNightVision, setIsNightVision] = useState(false);
+  const [isFlipped, setIsFlipped] = useState(false);
+  const [overlayMode, setOverlayMode] = useState('reticle'); // 'reticle' | 'grid' | 'none'
 
   // Generate a clean, instant room code that never blocks or waits
   const [roomCode] = useState(() => {
@@ -149,6 +166,13 @@ export default function CameraFeed({ isDemoMode }) {
     setStatusMessage('Waiting for smartphone connection...');
   };
 
+  // Listen to keyboard shortcut or external snapshot trigger
+  useEffect(() => {
+    if (triggerSnapshot > 0) {
+      handleCaptureSnapshot();
+    }
+  }, [triggerSnapshot]);
+
   const handleCaptureSnapshot = () => {
     if (!videoRef.current) return;
     soundManager.playShutter();
@@ -160,6 +184,12 @@ export default function CameraFeed({ isDemoMode }) {
     canvas.width = w;
     canvas.height = h;
     const ctx = canvas.getContext('2d');
+
+    // Handle flip in capture
+    if (isFlipped) {
+      ctx.translate(w, 0);
+      ctx.scale(-1, 1);
+    }
 
     // Draw frame or placeholder
     if (isLive) {
@@ -174,27 +204,41 @@ export default function CameraFeed({ isDemoMode }) {
       ctx.textAlign = 'left';
     }
 
-    // Tactical Watermark
-    ctx.fillStyle = 'rgba(6, 9, 14, 0.85)';
-    ctx.fillRect(0, h - 56, w, 56);
+    // Reset transform for watermark
+    if (isFlipped) {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+    }
+
+    // Tactical Watermark Bar
+    ctx.fillStyle = 'rgba(6, 9, 14, 0.88)';
+    ctx.fillRect(0, h - 60, w, 60);
 
     ctx.fillStyle = '#00c2cb';
     ctx.font = 'bold 22px sans-serif';
-    ctx.fillText('UIU RESCUE ROVER TEAM (#URRT)', 24, h - 22);
+    ctx.fillText('UIU RESCUE ROVER TEAM (#URRT)', 24, h - 24);
+
+    const tempStr = temperature !== null && temperature !== undefined ? `${temperature}°C` : '--';
+    const humStr = humidity !== null && humidity !== undefined ? `${humidity}%` : '--';
+    const timeStr = new Date().toLocaleString();
 
     ctx.fillStyle = '#f1f5f9';
-    ctx.font = '16px monospace';
-    const timeStr = new Date().toLocaleString();
-    ctx.fillText(`CAM 01 • ${timeStr}`, w - 300, h - 22);
+    ctx.font = '15px monospace';
+    ctx.fillText(`TEMP: ${tempStr} | HUM: ${humStr} | CAM 01 • ${timeStr}`, w - 480, h - 24);
 
     const dataUrl = canvas.toDataURL('image/png');
     const snapshotItem = {
       id: Date.now(),
       url: dataUrl,
-      timestamp: timeStr
+      timestamp: timeStr,
+      temp: tempStr,
+      hum: humStr
     };
 
-    setSnapshots(prev => [snapshotItem, ...prev]);
+    setSnapshots(prev => {
+      const next = [snapshotItem, ...prev];
+      onSnapshotsCountChange(next.length);
+      return next;
+    });
     setShowGalleryModal(true);
   };
 
@@ -292,14 +336,111 @@ export default function CameraFeed({ isDemoMode }) {
       {/* Main Video Viewport */}
       <div className="relative flex-1 bg-black flex items-center justify-center overflow-hidden min-h-[300px]">
         
-        {/* Remote Live Video Stream Element */}
+        {/* Remote Live Video Stream Element with Tactical Shader & Zoom */}
         <video
           ref={videoRef}
           autoPlay
           playsInline
           muted
+          style={{
+            transform: `scale(${zoomLevel}) ${isFlipped ? 'scaleX(-1)' : ''}`,
+            filter: isNightVision ? 'contrast(135%) brightness(115%) sepia(1) hue-rotate(85deg) saturate(380%)' : 'none',
+            transition: 'transform 0.2s ease, filter 0.2s ease'
+          }}
           className={`w-full h-full object-contain ${isLive ? 'block' : 'hidden'}`}
         />
+
+        {/* Tactical Search Reticle / Grid Overlay */}
+        {overlayMode === 'reticle' && (
+          <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+            <div className="relative w-16 h-16 border border-[#00c2cb]/40 rounded-full flex items-center justify-center">
+              <div className="w-1.5 h-1.5 bg-rose-500 rounded-full animate-ping" />
+              <div className="absolute w-full h-[1px] bg-[#00c2cb]/50" />
+              <div className="absolute h-full w-[1px] bg-[#00c2cb]/50" />
+            </div>
+            <div className="absolute inset-6 pointer-events-none">
+              <div className="absolute top-0 left-0 w-3.5 h-3.5 border-t-2 border-l-2 border-[#00c2cb]" />
+              <div className="absolute top-0 right-0 w-3.5 h-3.5 border-t-2 border-r-2 border-[#00c2cb]" />
+              <div className="absolute bottom-0 left-0 w-3.5 h-3.5 border-b-2 border-l-2 border-[#00c2cb]" />
+              <div className="absolute bottom-0 right-0 w-3.5 h-3.5 border-b-2 border-r-2 border-[#00c2cb]" />
+            </div>
+          </div>
+        )}
+
+        {overlayMode === 'grid' && (
+          <div className="absolute inset-0 pointer-events-none grid grid-cols-3 grid-rows-3 border border-[#00c2cb]/20">
+            <div className="border-r border-b border-[#00c2cb]/20" />
+            <div className="border-r border-b border-[#00c2cb]/20" />
+            <div className="border-b border-[#00c2cb]/20" />
+            <div className="border-r border-b border-[#00c2cb]/20" />
+            <div className="border-r border-b border-[#00c2cb]/20" />
+            <div className="border-b border-[#00c2cb]/20" />
+            <div className="border-r border-[#00c2cb]/20" />
+            <div className="border-r border-[#00c2cb]/20" />
+            <div />
+          </div>
+        )}
+
+        {/* Tactical Control Bar on Viewport */}
+        <div className="absolute bottom-3 left-3 z-20 flex items-center pointer-events-auto">
+          <div className="flex items-center gap-1.5 bg-[#06090e]/85 backdrop-blur-md px-2 py-1 rounded-xl border border-[#162338]">
+            <button
+              onClick={() => {
+                soundManager.playChirp();
+                setZoomLevel(z => z === 1 ? 1.5 : z === 1.5 ? 2 : 1);
+              }}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[#0f1624] text-[10px] font-mono text-[#00c2cb] hover:bg-[#162338] transition-colors"
+              title="Toggle Digital Zoom (1x, 1.5x, 2x)"
+            >
+              <ZoomIn className="w-3 h-3" />
+              <span>{zoomLevel}X</span>
+            </button>
+
+            <button
+              onClick={() => {
+                soundManager.playChirp();
+                setIsNightVision(v => !v);
+              }}
+              className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-mono transition-colors ${
+                isNightVision 
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' 
+                  : 'bg-[#0f1624] text-slate-400 hover:text-white'
+              }`}
+              title="Toggle Night Vision / Low-Light NVG Shader"
+            >
+              <Eye className="w-3 h-3" />
+              <span>NVG</span>
+            </button>
+
+            <button
+              onClick={() => {
+                soundManager.playChirp();
+                setIsFlipped(f => !f);
+              }}
+              className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-mono transition-colors ${
+                isFlipped 
+                  ? 'bg-[#00c2cb]/20 text-[#00c2cb] border border-[#00c2cb]/40' 
+                  : 'bg-[#0f1624] text-slate-400 hover:text-white'
+              }`}
+              title="Mirror / Flip Video Stream"
+            >
+              <FlipHorizontal className="w-3 h-3" />
+              <span>FLIP</span>
+            </button>
+
+            <button
+              onClick={() => {
+                soundManager.playChirp();
+                setOverlayMode(m => m === 'reticle' ? 'grid' : m === 'grid' ? 'none' : 'reticle');
+              }}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[#0f1624] text-[10px] font-mono text-slate-300 hover:text-white transition-colors"
+              title="Cycle Reticle / Search Grid / Off"
+            >
+              {overlayMode === 'reticle' ? <Crosshair className="w-3 h-3 text-rose-400" /> : <Grid className="w-3 h-3 text-[#00c2cb]" />}
+              <span className="uppercase">{overlayMode}</span>
+            </button>
+          </div>
+        </div>
 
         {/* Fallback Standby / Demo View when no phone camera is connected */}
         {!isLive && (
