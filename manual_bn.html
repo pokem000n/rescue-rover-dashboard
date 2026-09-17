@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<title>UIU Rescue Rover Team (#URRT) - Operator Manual</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Rajdhani:wght@600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  @page {
+    size: A4;
+    margin: 12mm 14mm 14mm 14mm;
+  }
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+  body {
+    font-family: 'Hind Siliguri', 'Segoe UI', Tahoma, sans-serif;
+    color: #1e293b;
+    background: #ffffff;
+    line-height: 1.55;
+    font-size: 13px;
+  }
+  .tech-font {
+    font-family: 'Rajdhani', sans-serif;
+    letter-spacing: 0.5px;
+  }
+  .mono-font {
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Header Cover Banner */
+  .cover-header {
+    background: linear-gradient(135deg, #06090e 0%, #0f172a 60%, #082f49 100%);
+    color: #ffffff;
+    padding: 24px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    border-bottom: 4px solid #00c2cb;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .cover-title h1 {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 26px;
+    font-weight: 700;
+    color: #00e5ff;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+  .cover-title h2 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #f1f5f9;
+    margin-bottom: 6px;
+  }
+  .cover-title p {
+    font-size: 11.5px;
+    color: #94a3b8;
+  }
+  .badge-tag {
+    display: inline-block;
+    background: rgba(0, 194, 203, 0.2);
+    border: 1px solid #00c2cb;
+    color: #00c2cb;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .cover-badge {
+    text-align: right;
+  }
+
+  /* Section Styling */
+  .section {
+    margin-bottom: 20px;
+    page-break-inside: avoid;
+  }
+  .section-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #0f172a;
+    border-left: 4px solid #00c2cb;
+    padding-left: 10px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f8fafc;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    border-radius: 0 6px 6px 0;
+  }
+  .section-title span.en {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 13px;
+    color: #0284c7;
+    font-weight: 600;
+  }
+
+  /* Cards Grid */
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 12px;
+  }
+  .card h3 {
+    font-size: 13px;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .card p {
+    font-size: 12px;
+    color: #475569;
+    line-height: 1.5;
+  }
+
+  /* Callout Boxes */
+  .callout {
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    font-size: 12px;
+    border-left: 4px solid;
+  }
+  .callout-info {
+    background: #f0f9ff;
+    border-color: #0284c7;
+    color: #0369a1;
+  }
+  .callout-success {
+    background: #f0fdf4;
+    border-color: #16a34a;
+    color: #15803d;
+  }
+  .callout-warning {
+    background: #fffbeb;
+    border-color: #d97706;
+    color: #b45309;
+  }
+  .callout-danger {
+    background: #fef2f2;
+    border-color: #dc2626;
+    color: #b91c1c;
+  }
+
+  /* Table */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 12px;
+    font-size: 11.5px;
+  }
+  th, td {
+    border: 1px solid #cbd5e1;
+    padding: 6px 10px;
+    text-align: left;
+  }
+  th {
+    background: #f1f5f9;
+    color: #0f172a;
+    font-weight: 700;
+  }
+  tr:nth-child(even) {
+    background: #f8fafc;
+  }
+  .key-cap {
+    display: inline-block;
+    background: #e2e8f0;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 10.5px;
+    color: #0f172a;
+    box-shadow: 0 1px 0 #94a3b8;
+  }
+
+  .step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    background: #00c2cb;
+    color: #000;
+    border-radius: 50%;
+    font-weight: 700;
+    font-size: 12px;
+    margin-right: 6px;
+  }
+
+  /* Footer */
+  .page-footer {
+    border-top: 1px solid #cbd5e1;
+    padding-top: 8px;
+    margin-top: 20px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 10.5px;
+    color: #64748b;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .page-break {
+    page-break-after: always;
+  }
+</style>
+</head>
+<body>
+
+<!-- PAGE 1: COVER & ARCHITECTURE -->
+<div class="cover-header">
+  <div class="cover-title">
+    <h1>UIU RESCUE ROVER TEAM (#URRT)</h1>
+    <h2>মিশন কন্ট্রোল ড্যাশবোর্ড — অপারেটর হ্যান্ডবুক ও বিস্তারিত নির্দেশিকা</h2>
+    <p>RoboCup Junior Rescue Rover & Disaster Response Operations Manual</p>
+  </div>
+  <div class="cover-badge">
+    <div class="badge-tag">OFFICIAL OPERATOR GUIDE</div>
+    <p style="margin-top: 6px; font-size: 11px; color: #94a3b8; font-family: monospace;">Version 2.4 | 2026 Edition</p>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">
+    <span>১. ড্যাশবোর্ডের মূল উদ্দেশ্য ও আর্কিটেকচার (System Architecture)</span>
+    <span class="en">OVERVIEW & DATA PIPELINE</span>
+  </div>
+  <p style="margin-bottom: 10px;">
+    এই ড্যাশবোর্ডটি <strong>UIU Rescue Rover Team (#URRT)</strong> এর রেসকিউ রোভারের জন্য তৈরি একটি হাই-স্পিড, রিয়েল-টাইম মিশন কন্ট্রোল সিস্টেম। রোভার যখন বিপজ্জনক ধ্বংসস্তূপ (Arena) বা দুর্যোগপূর্ণ এলাকায় প্রবেশ করে, তখন এই সিস্টেমের মাধ্যমে অপারেটর নিরাপদ দূরত্বে বসে রোভারের চারপাশের লাইভ ভিডিও দেখা, তাপমাত্রা ও আর্দ্রতা পরিমাপ করা, ভিকটিম ও হ্যাজার্ড চিহ্নিত করা এবং ম্যাচ শেষে বিচারকদের জন্য অফিসিয়াল রিপোর্ট তৈরি করতে পারেন।
+  </p>
+  
+  <div class="grid-3">
+    <div class="card" style="border-top: 3px solid #00c2cb;">
+      <h3>🛰️ ১. ESP32 সেন্সর নোড</h3>
+      <p>রোভারে যুক্ত সেন্সরগুলো প্রতি ১০০ মিলিসেকেন্ড পর পর তাপমাত্রা ও আর্দ্রতার টেলিমেট্রি প্যাকেট Wi-Fi বা USB সিরিয়াল বাসে পাঠায়।</p>
+    </div>
+    <div class="card" style="border-top: 3px solid #3b82f6;">
+      <h3>⚡ ২. হাই-স্পিড বাস সার্ভার</h3>
+      <p>Node.js ও WebSocket সার্ভার কোনো ল্যাগ ছাড়া ডেটা ব্রডকাস্ট করে এবং একাধিক স্ক্রিনে তাৎক্ষণিক синхронাইজেশন বজায় রাখে।</p>
+    </div>
+    <div class="card" style="border-top: 3px solid #10b981;">
+      <h3>📱 ৩. WebRTC মোবাইল ক্যামেরা</h3>
+      <p>স্মার্টফোনকে সরাসরি ড্রাইভ বা রোবোটিক আর্ম ক্যামেরা হিসেবে যুক্ত করে আল্ট্রা-লো ল্যাটেন্সি (Ultra-low latency) লাইভ স্ট্রিম প্রদান করে।</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">
+    <span>২. হেডার বার ও ম্যাচ টাইমার পরিচালনা (Header & Timer Controls)</span>
+    <span class="en">MISSION TIMER & HUD</span>
+  </div>
+  <p style="margin-bottom: 8px;">হেডারে পুরো রোভারের লাইভ স্ট্যাটাস এবং ম্যাচের সময়সীমা নিয়ন্ত্রণ করার ব্যবস্থা রয়েছে:</p>
+  
+  <div class="grid-2">
+    <div class="card">
+      <h3>⏱️ ৮-মিনিট কাউন্টডাউন টাইমার (Match Timer)</h3>
+      <p>
+        • <strong>শুরু/থামানো:</strong> কীবোর্ডের <span class="key-cap">Space</span> চাপুন অথবা প্লে/পজ বাটনে ক্লিক করুন।<br>
+        • <strong>৩ মিনিট বাকি থাকলে:</strong> টাইমারটি হলুদ হয়ে সতর্কবার্তা দেয়।<br>
+        • <strong>১ মিনিট বাকি থাকলে:</strong> টাইমারটি লাল হয়ে সাইরেন অ্যালার্ম বাজাতে থাকে।<br>
+        • <strong>সময় শেষ হলে:</strong> স্বয়ংক্রিয়ভাবে বিচারকদের <em>Debrief Report</em> স্ক্রিন চালু হয়।<br>
+        • <strong>ড্রপডাউন:</strong> প্রয়োজন অনুযায়ী ৮ মিনিট, ৫ মিনিট বা ১০ মিনিটে সেট করা যায়।
+      </p>
+    </div>
+    <div class="card">
+      <h3>🛠️ হেডার কুইক টুলস ও সেটিংস</h3>
+      <p>
+        • <strong>GUIDE বাটন (<span class="key-cap">G</span>):</strong> ৪-ধাপের কুইক নির্দেশিকা পপআপ ওপেন করে।<br>
+        • <strong>DEBRIEF বাটন (<span class="key-cap">R</span>):</strong> বিচারকদের স্কোর ও সার্টিফিকেশন রিপোর্ট খোলে।<br>
+        • <strong>স্লাইডার বাটন:</strong> তাপমাত্রা ও আর্দ্রতার বিপদসীমা (Thresholds) পরিবর্তন করে।<br>
+        • <strong>সূর্য/চাঁদ আইকন:</strong> রোদের মধ্যে উজ্জ্বল স্ক্রিনের জন্য <em>Day/Light Mode</em> চালু করে।<br>
+        • <strong>DEMO সুইচ (<span class="key-cap">D</span>):</strong> রোভার ছাড়াই প্র্যাকটিস বা প্রেজেন্টেশন দেখানোর ভার্চুয়াল মোড।
+      </p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">
+    <span>৩. রোভার হেলথ স্ট্যাটাস ব্যানার (Rover Health Status Banner)</span>
+    <span class="en">HEALTH DIAGNOSTICS</span>
+  </div>
+  <p style="margin-bottom: 8px;">স্ক্রিনের ঠিক ওপরে থাকা এই ব্যানারটি ১ সেকেন্ডে যে কাউকে রোভারের সার্বিক পরিস্থিতি বুঝিয়ে দেয়:</p>
+  
+  <div class="callout callout-success">
+    <strong>🟢 ALL SYSTEMS NOMINAL • OPERATIONAL:</strong> রোভারের টেলিমেট্রি লিংক এবং ক্যামেরা স্ট্রিম পুরোপুরি সুস্থ ও স্বাভাবিক রয়েছে।
+  </div>
+  <div class="callout callout-warning">
+    <strong>🟡 ELEVATED HEAT DETECTED • WARNING:</strong> এরেনায় তাপমাত্রা ৩৫°C ছাড়িয়েছে, রোভারের অবস্থা মনিটর করুন।
+  </div>
+  <div class="callout callout-danger">
+    <strong>🔴 CRITICAL OVERHEAT • DANGER:</strong> তাপমাত্রা ৪০°C বা বিপদসীমা অতিক্রম করেছে! অবিলম্বে রোভার পরিদর্শন করা জরুরি।
+  </div>
+  <div class="callout callout-danger" style="background: #fff1f2; border-color: #e11d48; color: #9f1239;">
+    <strong>⚫ ROVER DISCONNECTED • OFFLINE:</strong> ESP32 মাইক্রোকন্ট্রোলারের সাথে সংযোগ পাওয়া যাচ্ছে না। কেবল/ওয়াইফাই চেক করুন।
+  </div>
+</div>
+
+<div class="page-footer">
+  <span>UIU RESCUE ROVER TEAM (#URRT)</span>
+  <span>PAGE 1 OF 3</span>
+  <span>ROBOCUP RESCUE OPERATIONS</span>
+</div>
+
+<div class="page-break"></div>
+
+<!-- PAGE 2: 5 CATEGORY TABS & MULTI-CAMERA -->
+<div class="section">
+  <div class="section-title">
+    <span>৪. ক্যাটাগরি ট্যাব নেভিগেশন — ৫টি মূল ভিউ (Category Tabs)</span>
+    <span class="en">5 CORE HUD MODULES</span>
+  </div>
+  <p style="margin-bottom: 10px;">
+    স্ক্রল করার ক্লান্তি দূর করতে পুরো ড্যাশবোর্ডকে ৫টি সুনির্দিষ্ট ক্যাটাগরিতে ভাগ করা হয়েছে। কীবোর্ডের <span class="key-cap">1</span> থেকে <span class="key-cap">5</span> চেপে তাৎক্ষণিক ট্যাবে যাওয়া যায়:
+  </p>
+
+  <div class="card" style="margin-bottom: 10px; border-left: 4px solid #00c2cb;">
+    <h3 style="color: #00838f;">📡 ট্যাব ১: MISSION CONTROL (শর্টকাট: <span class="key-cap">1</span>) — প্রধান অপারেশনাল স্ক্রিন</h3>
+    <p>
+      • <strong>মাল্টি-ক্যামেরা ডিসপ্লে:</strong> ড্রাইভ বা আর্ম ক্যামেরা থেকে লাইভ ভিডিও প্রদর্শন।<br>
+      • <strong>এনভায়রনমেন্টাল ডায়াল গজ:</strong> বর্তমান তাপমাত্রা ও আর্দ্রতার রিয়েল-টাইম সুই ডায়াল।<br>
+      • <strong>টেলিমেট্রি হিস্ট্রি গ্রাফ:</strong> গত ৫০টি ডেটা পয়েন্টের স্মুথ ওয়েভফর্ম (Waveform), যা দেখে বোঝা যায় তাপমাত্রা বাড়ছে নাকি কমছে।
+    </p>
+  </div>
+
+  <div class="card" style="margin-bottom: 10px; border-left: 4px solid #10b981;">
+    <h3 style="color: #047857;">📋 ট্যাব ২: LOGBOOK & PHOTOS (শর্টকাট: <span class="key-cap">2</span>) — ভিকটিম ও হ্যাজার্ড লগ</h3>
+    <p>
+      রোভার চালানোর সময় কোনো ঘটনা দেখলে অপারেটর এই ট্যাবে এসে ১-ক্লিকেই রেকর্ড করবেন:<br>
+      • <span style="color: #059669; font-weight: 700;">[+ VICTIM SIGHTED]:</span> কোনো ভিকটিম বা আহত পুতুল দেখা গেলে ক্লিক করুন। সাথে সাথে টাইমার টাইম এবং বর্তমান তাপমাত্রা সেভ হবে।<br>
+      • <span style="color: #d97706; font-weight: 700;">[+ HAZARD / DEBRIS]:</span> ভাঙা পাথর, বাধা বা পিচ্ছিল স্থান দেখলে ট্যাগ করুন।<br>
+      • <span style="color: #2563eb; font-weight: 700;">[+ CHECKPOINT CLEARED]:</span> রোভার এরেনার কোনো নির্দিষ্ট ধাপ বা কিউব পার করলে ট্যাগ করুন।<br>
+      • <strong>স্ন্যাপশট গ্যালারি:</strong> ক্যামেরার ছবিগুলো ওয়াটারমার্ক (তারিখ, সময় ও সেন্সর ভ্যালু) সহ নিচে সুন্দর থাম্বনেইল আকারে জমা থাকে।<br>
+      • <strong>EXPORT LOG:</strong> সম্পূর্ণ লগবুক এক্সেল স্প্রেডশীট (.CSV) হিসেবে ডাউনলোড করে বিচারকদের প্রমাণ দেওয়া যায়।
+    </p>
+  </div>
+
+  <div class="card" style="margin-bottom: 10px; border-left: 4px solid #f59e0b;">
+    <h3 style="color: #b45309;">🔥 ট্যাব ৩: ENVIRONMENT & RISKS (শর্টকাট: <span class="key-cap">3</span>) — পরিবেশগত ঝুঁকি ম্যাট্রিক্স</h3>
+    <p>
+      • <strong>থার্মাল থ্রেট ম্যাট্রিক্স (Heat Index):</strong> তাপমাত্রা ও আর্দ্রতার সম্মিলিত প্রভাবে এলাকাটি রোভার বা মানুষের জন্য কতটা নিরাপদ তা ৪টি স্তরে (SAFE, CAUTION, DANGER, CRITICAL) বিশ্লেষণ করে।<br>
+      • রোভারের ইলেকট্রনিক্স অতিরিক্ত গরম হয়ে পুড়ে যাওয়া ঠেকাতে অপারেটর এই ম্যাট্রিক্স পর্যবেক্ষণ করেন।
+    </p>
+  </div>
+
+  <div class="card" style="margin-bottom: 10px; border-left: 4px solid #8b5cf6;">
+    <h3 style="color: #6d28d9;">💻 ট্যাব ৪: SYSTEM & PACKETS (শর্টকাট: <span class="key-cap">4</span>) — হার্ডওয়্যার ডায়াগনস্টিক ও বাস</h3>
+    <p>
+      • ESP32 কন্ট্রোলারের আইপি অ্যাড্রেস, রাউন্ড-ট্রিপ ল্যাটেন্সি এবং মোট ডেটা প্যাকেট কাউন্ট দেখায়।<br>
+      • <strong>Raw JSON Bus Log:</strong> ব্যাকএন্ড থেকে আসা খাঁটি ডেটা প্যাকেট স্ক্রল করে প্রদর্শন করে, যা বিচারকদের প্রমাণ দেয় যে কোনো ভুয়া ডেটা নয়, সরাসরি সেন্সর থেকেই ডেটা আসছে।
+    </p>
+  </div>
+
+  <div class="card" style="border-left: 4px solid #64748b;">
+    <h3 style="color: #334155;">🗂️ ট্যাব ৫: VIEW ALL (শর্টকাট: <span class="key-cap">5</span>) — সম্পূর্ণ একীভূত ভিউ</h3>
+    <p>
+      যারা বড় মনিটর বা প্রজেক্টরে এক নজরে ক্যামেরা, চার্ট, থ্রেট ম্যাট্রিক্স এবং লগবুক একসাথে দেখতে চান, তাদের জন্য এই ভিউ উপযুক্ত।
+    </p>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">
+    <span>৫. মাল্টি-ক্যামেরা ও ফ্লোটিং মিনি-HUD (Multi-Camera & Floating PiP)</span>
+    <span class="en">VISION SYSTEM</span>
+  </div>
+  <p style="margin-bottom: 8px;">রোবোকাপ রেসকিউতে রোভারের ক্যামেরা সিস্টেম অত্যন্ত গুরুত্বপূর্ণ:</p>
+  
+  <div class="grid-2">
+    <div class="card">
+      <h3>📹 মাল্টি-চ্যানেল ক্যামেরা সুইচিং</h3>
+      <p>
+        • <strong>CAM 01 (Drive):</strong> রোভারের সামনের পথ দেখার প্রধান ক্যামেরা।<br>
+        • <strong>CAM 02 (Arm):</strong> রোবোটিক আর্ম বা গ্রিপারের সাহায্যে সূক্ষ্ম পর্যবেক্ষণ ক্যামেরা।<br>
+        • <strong>CAM 03 (Rear):</strong> পেছনের নিরাপত্তা দেখার ব্যাকআপ ক্যামেরা।<br>
+        • <strong>DUAL SPLIT:</strong> দুই পাশের ক্যামেরা একসাথে পাশাপাশি দেখার স্প্লিট স্ক্রিন মোড।
+      </p>
+    </div>
+    <div class="card">
+      <h3>🪟 অটো ফ্লোটিং মিনি-ক্যামেরা (Picture-in-Picture)</h3>
+      <p>
+        • আপনি যখন লগবুক বা অন্য ট্যাবে কাজ করার জন্য স্ক্রল করবেন, তখন ক্যামেরা নিজে থেকেই স্ক্রিনের নিচে ডানপাশে <strong>ফ্লোটিং উইন্ডো</strong> হিসেবে ভেসে থাকবে!<br>
+        • ফলে লাইভ ভিডিও চোখের আড়াল হয় না।<br>
+        • ফ্লোটিং বারে <span class="key-cap">M</span>, <span class="key-cap">L</span>, <span class="key-cap">XL</span> বাটন চেপে স্ক্রিনের সাইজ ছোট-বড় করা যায়।
+      </p>
+    </div>
+  </div>
+</div>
+
+<div class="page-footer">
+  <span>UIU RESCUE ROVER TEAM (#URRT)</span>
+  <span>PAGE 2 OF 3</span>
+  <span>ROBOCUP RESCUE OPERATIONS</span>
+</div>
+
+<div class="page-break"></div>
+
+<!-- PAGE 3: PHONE PAIRING, DEBRIEF & HOTKEYS -->
+<div class="section">
+  <div class="section-title">
+    <span>৬. মোবাইল ক্যামেরা কানেক্ট করার নিয়ম (Phone Camera Pairing)</span>
+    <span class="en">WEBRTC PAIRING WORKFLOW</span>
+  </div>
+  <p style="margin-bottom: 8px;">যেকোনো অ্যান্ড্রয়েড বা আইফোনকে খুব সহজে রোভারের ক্যামেরা হিসেবে ব্যবহার করা যায়:</p>
+  
+  <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+    <p><strong><span class="step-num">১</span> "ADD CAM" এ ক্লিক করুন:</strong> ক্যামেরা স্ক্রিনের ওপরের ডানদিকের "ADD CAM" বাটনে চাপ দিন। একটি QR কোড পপআপ দেখতে পাবেন।</p>
+    <p style="margin-top: 6px;"><strong><span class="step-num">২</span> ফোনের ক্যামেরা দিয়ে স্ক্যান করুন:</strong> ফোনের ক্যামেরা ওপেন করে কিউআর কোডটি স্ক্যান করুন অথবা লিংকে প্রবেশ করুন।</p>
+    <p style="margin-top: 6px;"><strong><span class="step-num">৩</span> পারমিশন "Allow" দিন:</strong> ফোনের ব্রাউজারে "Allow Camera Access" সিলেক্ট করুন এবং "START BROADCAST" এ চাপুন।</p>
+    <p style="margin-top: 6px;"><strong><span class="step-num">৪</span> লাইভ স্ট্রিম সক্রিয়:</strong> সাথে সাথে ফোনের ভিডিও ড্যাশবোর্ডে আল্ট্রা-লো ল্যাটেন্সিতে চালু হয়ে যাবে!</p>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">
+    <span>৭. বিচারকদের রিপোর্ট তৈরি ও সার্টিফিকেট (Debrief & Judge Report)</span>
+    <span class="en">POST-MATCH CERTIFICATION</span>
+  </div>
+  <p style="margin-bottom: 8px;">ম্যাচ শেষ হওয়া মাত্র বিচারকদের হাতে সুনির্দিষ্ট প্রমাণ দেওয়ার জন্য রয়েছে স্বয়ংক্রিয় Debrief ব্যবস্থা:</p>
+  
+  <div class="card" style="border-left: 4px solid #f59e0b;">
+    <p>
+      • হেডারের <strong>DEBRIEF</strong> বাটনে চাপ দিন বা কীবোর্ডে <span class="key-cap">R</span> চাপুন।<br>
+      • এটি স্বয়ংক্রিয়ভাবে একটি অফিসিয়াল সার্টিফিকেট তৈরি করবে যেখানে ম্যাচের মোট ব্যয়িত সময়, সর্বোচ্চ/গড় তাপমাত্রা, মোট ভিকটিম উদ্ধার সংখ্যা এবং প্যাকেট স্বাস্থ্য তালিকাভুক্ত থাকবে।<br>
+      • <strong>PRINT / PDF:</strong> বাটনে চাপ দিলে সঙ্গে সঙ্গে প্রিন্টার ডায়ালগ খুলবে এবং ১-ক্লিকেই বিচারকদের জন্য কালারফুল PDF ডাউনলোড করা যাবে।
+    </p>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">
+    <span>৮. কীবোর্ড শর্টকাট রেফারেন্স (Operator Hotkeys Cheatsheet)</span>
+    <span class="en">QUICK KEYBOARD SHORTCUTS</span>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 25%;">শর্টকাট কী (Key)</th>
+        <th style="width: 40%;">কাজের বিবরণ (Action)</th>
+        <th style="width: 35%;">কখন ব্যবহার করবেন</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="key-cap">SPACE</span></td>
+        <td>ম্যাচ টাইমার স্টার্ট / পজ</td>
+        <td>রেফারি বাঁশি বাজানোর সাথে সাথে</td>
+      </tr>
+      <tr>
+        <td><span class="key-cap">S</span></td>
+        <td>ক্যামেরা থেকে ওয়াটারমার্ক স্ন্যাপশট নেওয়া</td>
+        <td>ভিকটিম বা কিউআর কোড দেখা মাত্র ছবি তুলতে</td>
+      </tr>
+      <tr>
+        <td><span class="key-cap">1</span> — <span class="key-cap">5</span></td>
+        <td>৫টি ক্যাটাগরি ট্যাবে দ্রুত সুইচ করা</td>
+        <td>ক্যামেরা, লগবুক বা সিস্টেমে দ্রুত যাওয়ার জন্য</td>
+      </tr>
+      <tr>
+        <td><span class="key-cap">G</span></td>
+        <td>কুইক অপারেটর গাইড (Guide) খোলা</td>
+        <td>কোনো নিয়ম ভুলে গেলে দ্রুত দেখতে</td>
+      </tr>
+      <tr>
+        <td><span class="key-cap">R</span></td>
+        <td>বিচারকদের Debrief ও সার্টিফিকেট খোলা</td>
+        <td>ম্যাচ শেষ হলে রিপোর্ট বের করতে</td>
+      </tr>
+      <tr>
+        <td><span class="key-cap">F</span></td>
+        <td>ফুলস্ক্রিন HUD টগল (Fullscreen)</td>
+        <td>অন্যান্য ব্রাউজার ট্যাব লুকিয়ে পুরো স্ক্রিন পেতে</td>
+      </tr>
+      <tr>
+        <td><span class="key-cap">M</span></td>
+        <td>HUD অডিও মিউট / আনমিউট</td>
+        <td>অ্যালার্ম সাউন্ড বন্ধ বা চালু করতে</td>
+      </tr>
+      <tr>
+        <td><span class="key-cap">D</span></td>
+        <td>ডেমো সিমুলেশন মোড অন / অফ</td>
+        <td>হার্ডওয়্যার ছাড়া ড্যাশবোর্ড প্রেজেন্ট করতে</td>
+      </tr>
+      <tr>
+        <td><span class="key-cap">?</span> বা <span class="key-cap">H</span></td>
+        <td>হটকিস সহায়িকা তালিকা প্রদর্শন</td>
+        <td>শর্টকাট তালিকা স্ক্রিনে দেখতে</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="section">
+  <div class="section-title">
+    <span>৯. ম্যাচের আগের ৫-মিনিট চেকলিস্ট (Pre-Match Checklist)</span>
+    <span class="en">OPERATOR PRE-FLIGHT CHECK</span>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <h3>✅ হার্ডওয়্যার চেকলিস্ট</h3>
+      <p>
+        ১. রোভারের ব্যাটারি ভোল্টেজ চেক করুন।<br>
+        ২. ESP32 Wi-Fi এর সাথে ল্যাপটপ কানেক্টেড কিনা দেখুন (সবুজ ONLINE ব্যাজ)।<br>
+        ৩. ফোন স্ট্যান্ডে লাগিয়ে QR কোড স্ক্যান করে CAM 01 ও CAM 02 ফিড যাচাই করুন।
+      </p>
+    </div>
+    <div class="card">
+      <h3>✅ সফ্টওয়্যার ও এরেনা চেকলিস্ট</h3>
+      <p>
+        ১. হেডারের স্পিকার আনমিউট (<span class="key-cap">M</span>) রাখুন যেন সাইরেন শোনা যায়।<br>
+        ২. ম্যাচের সময় (৮ মিনিট) টাইমার ড্রপডাউনে সেট করুন।<br>
+        ৩. বাইরে তীব্র রোদ থাকলে ডে/লাইট মোড (Sun Icon) অন করে নিন।
+      </p>
+    </div>
+  </div>
+</div>
+
+<div class="page-footer">
+  <span>UIU RESCUE ROVER TEAM (#URRT)</span>
+  <span>PAGE 3 OF 3</span>
+  <span>UNITED INTERNATIONAL UNIVERSITY</span>
+</div>
+
+</body>
+</html>
