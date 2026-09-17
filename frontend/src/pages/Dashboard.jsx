@@ -1,13 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Header from '../components/Header';
 import MetricCard from '../components/MetricCard';
 import CameraFeed from '../components/CameraFeed';
 import TelemetryChart from '../components/TelemetryChart';
+import ThreatMatrix from '../components/ThreatMatrix';
 import SystemInfo from '../components/SystemInfo';
 import PacketLog from '../components/PacketLog';
 
 import { wsClient } from '../services/websocket';
 import { mockSimulator } from '../services/mockData';
+import { soundManager } from '../utils/soundEffects';
 
 const MAX_HISTORY_POINTS = 50;
 const MAX_LOG_ENTRIES = 40;
@@ -38,6 +40,8 @@ export default function Dashboard({ onNavigateToCamera }) {
   });
   const [isSimulatedOnline, setIsSimulatedOnline] = useState(true);
 
+  const lastAlarmTimeRef = useRef(0);
+
   // Ingests incoming telemetry data point (from real ESP32 or Demo simulator)
   const ingestSensorData = useCallback((data) => {
     const now = Date.now();
@@ -45,6 +49,12 @@ export default function Dashboard({ onNavigateToCamera }) {
     const hum = typeof data.humidity === 'number' ? data.humidity : parseFloat(data.humidity);
 
     if (isNaN(temp) || isNaN(hum)) return;
+
+    // Trigger hazard sound if extreme threshold breached (throttled to once per 10s)
+    if ((temp >= 40 || hum >= 85) && (now - lastAlarmTimeRef.current > 10000)) {
+      lastAlarmTimeRef.current = now;
+      soundManager.playHazardAlarm();
+    }
 
     setTemperature((current) => {
       setPrevTemperature(current);
@@ -139,6 +149,9 @@ export default function Dashboard({ onNavigateToCamera }) {
         const isOnline = payload.status === 'online';
         setEsp32Online(isOnline);
         if (payload.ip) setEsp32Ip(payload.ip);
+        if (!isOnline) {
+          soundManager.playHazardAlarm();
+        }
       }
     });
 
@@ -151,19 +164,24 @@ export default function Dashboard({ onNavigateToCamera }) {
   }, [isDemoMode, ingestSensorData]);
 
   const handleToggleDemoMode = () => {
+    soundManager.playChirp();
     setIsDemoMode(prev => !prev);
   };
 
   const handleToggleSimulatedRover = () => {
     if (isDemoMode) {
+      soundManager.playChirp();
       const next = mockSimulator.toggleSimulatedRoverOnline();
       setIsSimulatedOnline(next);
       setEsp32Online(next);
+      if (!next) {
+        soundManager.playHazardAlarm();
+      }
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0d14] text-slate-100 flex flex-col">
+    <div className="min-h-screen bg-[#06090e] text-slate-100 flex flex-col">
       {/* Tactical Top Mission Header */}
       <Header 
         esp32Online={esp32Online}
@@ -185,7 +203,7 @@ export default function Dashboard({ onNavigateToCamera }) {
           {/* Left Column: Environmental Gauges & Waveforms (7 Cols) */}
           <div className="lg:col-span-7 flex flex-col space-y-6">
             
-            {/* Real-time Metric Cards (Side by side on medium+, stacked on small) */}
+            {/* Real-time Metric Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <MetricCard 
                 type="temperature"
@@ -219,6 +237,12 @@ export default function Dashboard({ onNavigateToCamera }) {
           </div>
 
         </div>
+
+        {/* Environmental Threat Assessment & Heat Matrix */}
+        <ThreatMatrix 
+          temperature={temperature}
+          humidity={humidity}
+        />
 
         {/* Middle Section: System Diagnostics & Health */}
         <SystemInfo 

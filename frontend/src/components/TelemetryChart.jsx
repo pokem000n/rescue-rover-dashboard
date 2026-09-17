@@ -9,7 +9,9 @@ import {
   CartesianGrid,
   Legend
 } from 'recharts';
-import { LineChart as ChartIcon, Eye, Zap } from 'lucide-react';
+import { LineChart as ChartIcon, Eye, Zap, Download } from 'lucide-react';
+import { exportTelemetryToCSV } from '../utils/telemetryMath';
+import { soundManager } from '../utils/soundEffects';
 
 export default function TelemetryChart({ data = [] }) {
   // Format timestamps for display
@@ -26,6 +28,11 @@ export default function TelemetryChart({ data = [] }) {
       displayTime: label
     };
   });
+
+  const handleExportCSV = () => {
+    soundManager.playChirp();
+    exportTelemetryToCSV(data);
+  };
 
   return (
     <div className="rounded-2xl bg-[#0f1624] border border-[#162338] p-5 lg:p-6 shadow-xl flex flex-col h-full hover:border-[#00c2cb]/30 transition-colors">
@@ -46,10 +53,21 @@ export default function TelemetryChart({ data = [] }) {
           </div>
         </div>
 
-        <div className="flex items-center space-x-2 text-xs font-mono">
+        <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
+          <button
+            onClick={handleExportCSV}
+            disabled={data.length === 0}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#00c2cb]/15 hover:bg-[#00c2cb]/25 border border-[#00c2cb]/40 text-[#00c2cb] disabled:opacity-40 transition-colors font-semibold shadow-sm"
+            title="Export session data as CSV spreadsheet"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>EXPORT CSV</span>
+          </button>
+
           <span className="px-2.5 py-1 rounded-lg bg-[#06090e] border border-[#162338] text-slate-400">
             BUFFER: <strong className="text-[#00c2cb]">{chartData.length}</strong> / 50 SAMPLES
           </span>
+
           <span className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
             <Zap className="w-3 h-3" />
             LIVE SYNC

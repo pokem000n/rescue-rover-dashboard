@@ -8,11 +8,16 @@ import {
   X, 
   Video,
   Radio,
+  Camera as CameraIcon,
+  Images,
+  Download,
+  Trash2,
   CheckCircle2,
   Loader2
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Peer } from 'peerjs';
+import { soundManager } from '../utils/soundEffects';
 
 const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -38,6 +43,8 @@ export default function CameraFeed({ isDemoMode }) {
   const [streamStatus, setStreamStatus] = useState('waiting'); // 'waiting' | 'connecting' | 'connected'
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showPairModal, setShowPairModal] = useState(false);
+  const [showGalleryModal, setShowGalleryModal] = useState(false);
+  const [snapshots, setSnapshots] = useState([]);
   const [statusMessage, setStatusMessage] = useState('Waiting for phone connection...');
 
   // Pairing URL is always ready instantly
@@ -49,7 +56,6 @@ export default function CameraFeed({ isDemoMode }) {
     let peerInstance = null;
 
     try {
-      // Connect to PeerJS with the generated roomCode
       peerInstance = new Peer(roomCode, {
         config: {
           iceServers: ICE_SERVERS
@@ -76,6 +82,7 @@ export default function CameraFeed({ isDemoMode }) {
             videoRef.current.play().then(() => {
               setStreamStatus('connected');
               setStatusMessage('Live feed active');
+              soundManager.playChirp();
             }).catch(e => {
               console.warn('Play error:', e);
               setStreamStatus('connected');
@@ -142,6 +149,55 @@ export default function CameraFeed({ isDemoMode }) {
     setStatusMessage('Waiting for smartphone connection...');
   };
 
+  const handleCaptureSnapshot = () => {
+    if (!videoRef.current) return;
+    soundManager.playShutter();
+
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    const w = video.videoWidth || 1280;
+    const h = video.videoHeight || 720;
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+
+    // Draw frame or placeholder
+    if (isLive) {
+      ctx.drawImage(video, 0, 0, w, h);
+    } else {
+      ctx.fillStyle = '#0a0f18';
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#00c2cb';
+      ctx.font = 'bold 36px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('UIU RESCUE ROVER SIMULATION FRAME', w / 2, h / 2);
+      ctx.textAlign = 'left';
+    }
+
+    // Tactical Watermark
+    ctx.fillStyle = 'rgba(6, 9, 14, 0.85)';
+    ctx.fillRect(0, h - 56, w, 56);
+
+    ctx.fillStyle = '#00c2cb';
+    ctx.font = 'bold 22px sans-serif';
+    ctx.fillText('UIU RESCUE ROVER TEAM (#URRT)', 24, h - 22);
+
+    ctx.fillStyle = '#f1f5f9';
+    ctx.font = '16px monospace';
+    const timeStr = new Date().toLocaleString();
+    ctx.fillText(`CAM 01 • ${timeStr}`, w - 300, h - 22);
+
+    const dataUrl = canvas.toDataURL('image/png');
+    const snapshotItem = {
+      id: Date.now(),
+      url: dataUrl,
+      timestamp: timeStr
+    };
+
+    setSnapshots(prev => [snapshotItem, ...prev]);
+    setShowGalleryModal(true);
+  };
+
   const isLive = streamStatus === 'connected';
 
   return (
@@ -183,9 +239,32 @@ export default function CameraFeed({ isDemoMode }) {
 
         {/* Viewport Action Controls */}
         <div className="flex items-center space-x-1.5 font-mono text-xs">
+          
+          {/* Snapshot Shutter Button */}
+          <button
+            onClick={handleCaptureSnapshot}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 hover:to-teal-500/30 border border-emerald-500/40 text-emerald-300 transition-colors font-semibold"
+            title="Capture inspection frame with watermark"
+          >
+            <CameraIcon className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">SNAPSHOT</span>
+          </button>
+
+          {/* Gallery Button */}
+          {snapshots.length > 0 && (
+            <button
+              onClick={() => setShowGalleryModal(true)}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-purple-500/20 border border-purple-500/40 text-purple-300 hover:bg-purple-500/30 transition-colors"
+              title="View inspection photos"
+            >
+              <Images className="w-3.5 h-3.5" />
+              <span>{snapshots.length}</span>
+            </button>
+          )}
+
           <button
             onClick={() => setShowPairModal(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-gradient-to-r from-[#00a8b5]/20 to-[#00c2cb]/10 hover:bg-[#00c2cb]/20 border border-[#00c2cb]/40 text-[#00c2cb] transition-colors"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[#00c2cb]/15 hover:bg-[#00c2cb]/25 border border-[#00c2cb]/40 text-[#00c2cb] transition-colors"
             title="Scan QR Code to stream from smartphone"
           >
             <QrCode className="w-3.5 h-3.5" />
@@ -374,6 +453,84 @@ export default function CameraFeed({ isDemoMode }) {
               className="mt-4 w-full py-2.5 rounded-xl bg-[#162338] hover:bg-slate-700 text-slate-200 font-tech font-semibold text-xs transition-colors"
             >
               CLOSE PAIRING WINDOW
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Inspection Snapshots Gallery Modal */}
+      {showGalleryModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0a0f18] border border-[#162338] rounded-2xl max-w-2xl w-full p-6 relative shadow-2xl flex flex-col max-h-[85vh]">
+            <button
+              onClick={() => setShowGalleryModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center justify-between pb-4 border-b border-[#162338] mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                  <Images className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold font-tech text-white uppercase">
+                    MISSION INSPECTION SNAPSHOTS
+                  </h3>
+                  <p className="text-[11px] font-mono text-slate-400">
+                    WATERMARKED VICTIM / HAZARD PHOTOGRAPHS • #URRT
+                  </p>
+                </div>
+              </div>
+
+              {snapshots.length > 0 && (
+                <button
+                  onClick={() => setSnapshots([])}
+                  className="flex items-center gap-1 text-xs text-rose-400 hover:text-rose-300 font-mono px-2 py-1 rounded hover:bg-rose-500/10"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>CLEAR ALL</span>
+                </button>
+              )}
+            </div>
+
+            {/* Gallery Grid */}
+            <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+              {snapshots.length === 0 ? (
+                <div className="py-16 text-center text-slate-500 font-mono text-xs">
+                  No snapshots captured yet. Click "SNAPSHOT" on the camera toolbar during a live mission!
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {snapshots.map((snap) => (
+                    <div key={snap.id} className="rounded-xl bg-[#06090e] border border-[#162338] overflow-hidden group">
+                      <div className="relative aspect-video bg-black">
+                        <img src={snap.url} alt="Rover inspection snapshot" className="w-full h-full object-cover" />
+                        <a
+                          href={snap.url}
+                          download={`URRT_Snapshot_${snap.id}.png`}
+                          className="absolute bottom-2 right-2 p-2 rounded-lg bg-black/80 hover:bg-[#00c2cb] hover:text-black text-white transition-colors shadow-lg"
+                          title="Download high-resolution image"
+                        >
+                          <Download className="w-4 h-4" />
+                        </a>
+                      </div>
+                      <div className="p-2.5 text-[10px] font-mono text-slate-400 flex items-center justify-between">
+                        <span>{snap.timestamp}</span>
+                        <span className="text-[#00c2cb] font-bold">#URRT_FRAME</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={() => setShowGalleryModal(false)}
+              className="mt-4 w-full py-2.5 rounded-xl bg-[#162338] hover:bg-slate-700 text-slate-200 font-tech font-semibold text-xs transition-colors"
+            >
+              CLOSE GALLERY
             </button>
           </div>
         </div>

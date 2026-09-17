@@ -1,12 +1,19 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Wifi, 
   WifiOff, 
   Clock, 
   Camera, 
-  Sparkles,
-  Power
+  Sparkles, 
+  Power,
+  Play,
+  Pause,
+  RotateCcw,
+  Volume2,
+  VolumeX,
+  Timer
 } from 'lucide-react';
+import { soundManager } from '../utils/soundEffects';
 
 export default function Header({ 
   esp32Online, 
@@ -18,6 +25,55 @@ export default function Header({
   isSimulatedOnline,
   onOpenMobileCamera
 }) {
+  // RoboCup Round Countdown Timer (8:00 minutes = 480 seconds)
+  const [matchSeconds, setMatchSeconds] = useState(480);
+  const [timerActive, setTimerActive] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+
+  useEffect(() => {
+    let interval = null;
+    if (timerActive && matchSeconds > 0) {
+      interval = setInterval(() => {
+        setMatchSeconds(sec => {
+          if (sec <= 1) {
+            setTimerActive(false);
+            soundManager.playHazardAlarm();
+            return 0;
+          }
+          if (sec === 60 || sec === 30 || sec === 10) {
+            soundManager.playHazardAlarm();
+          }
+          return sec - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [timerActive, matchSeconds]);
+
+  const toggleTimer = () => {
+    soundManager.playChirp();
+    setTimerActive(t => !t);
+  };
+
+  const resetTimer = () => {
+    soundManager.playChirp();
+    setTimerActive(false);
+    setMatchSeconds(480);
+  };
+
+  const toggleSound = () => {
+    const next = !isMuted;
+    setIsMuted(next);
+    soundManager.setMuted(next);
+    if (!next) soundManager.playChirp();
+  };
+
+  const formatTimer = (totalSeconds) => {
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
   const formatTime = (ts) => {
     if (!ts) return '--:--:--';
     const date = new Date(ts);
@@ -62,9 +118,38 @@ export default function Header({
           </div>
         </div>
 
-        {/* Telemetry Status Bar & Actions */}
+        {/* Telemetry Status Bar, Timer & Controls */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 text-xs font-mono">
           
+          {/* RoboCup Round Countdown Timer */}
+          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border ${
+            matchSeconds <= 60
+              ? 'bg-rose-500/20 border-rose-500/50 text-rose-300 animate-pulse'
+              : matchSeconds <= 180
+              ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+              : 'bg-[#0f1624] border-[#162338] text-white'
+          }`}>
+            <Timer className={`w-3.5 h-3.5 ${matchSeconds <= 60 ? 'text-rose-400' : 'text-[#00c2cb]'}`} />
+            <span className="text-[10px] text-slate-400">MATCH:</span>
+            <span className="font-bold text-sm tracking-wider">
+              {formatTimer(matchSeconds)}
+            </span>
+            <button
+              onClick={toggleTimer}
+              className="p-1 rounded-md hover:bg-white/10 text-slate-300 transition-colors ml-1"
+              title={timerActive ? 'Pause match timer' : 'Start match timer'}
+            >
+              {timerActive ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3 text-[#00c2cb]" />}
+            </button>
+            <button
+              onClick={resetTimer}
+              className="p-1 rounded-md hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+              title="Reset timer to 8:00"
+            >
+              <RotateCcw className="w-2.5 h-2.5" />
+            </button>
+          </div>
+
           {/* ESP32 Hardware Status Badge */}
           <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all ${
             esp32Online 
@@ -102,12 +187,18 @@ export default function Header({
             </span>
           </div>
 
-          {/* Timestamp Badge */}
-          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#0f1624] border border-[#162338] text-slate-300">
-            <Clock className="w-3.5 h-3.5 text-[#00c2cb]/70" />
-            <span className="text-slate-400">UPDATED:</span>
-            <span className="text-white font-semibold">{formatTime(lastUpdated)}</span>
-          </div>
+          {/* Audio Mute/Unmute Toggle */}
+          <button
+            onClick={toggleSound}
+            className={`p-2 rounded-xl border transition-colors ${
+              isMuted 
+                ? 'bg-slate-900 border-slate-800 text-slate-500' 
+                : 'bg-[#00c2cb]/10 border-[#00c2cb]/30 text-[#00c2cb]'
+            }`}
+            title={isMuted ? 'Unmute HUD Audio' : 'Mute HUD Audio'}
+          >
+            {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+          </button>
 
           {/* Mobile Camera Link Button */}
           <button
