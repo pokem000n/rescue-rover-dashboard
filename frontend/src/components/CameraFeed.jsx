@@ -18,7 +18,9 @@ import {
   Eye,
   FlipHorizontal,
   Crosshair,
-  Grid
+  Grid,
+  PictureInPicture2,
+  ArrowUpRight
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Peer } from 'peerjs';
@@ -39,8 +41,14 @@ export default function CameraFeed({
   onSnapshotsCountChange = () => {}
 }) {
   const videoRef = useRef(null);
+  const miniVideoRef = useRef(null);
+  const remoteStreamRef = useRef(null);
   const containerRef = useRef(null);
   const peerRef = useRef(null);
+
+  // Floating Sticky Picture-in-Picture Mini-HUD States
+  const [isScrolledOut, setIsScrolledOut] = useState(false);
+  const [isFloatingDismissed, setIsFloatingDismissed] = useState(false);
 
   // Tactical Camera Enhancements
   const [zoomLevel, setZoomLevel] = useState(1);
@@ -93,6 +101,7 @@ export default function CameraFeed({
 
         call.on('stream', (remoteStream) => {
           console.log('[CameraFeed] Stream received:', remoteStream);
+          remoteStreamRef.current = remoteStream;
           if (videoRef.current) {
             videoRef.current.srcObject = remoteStream;
             videoRef.current.muted = true;
@@ -105,10 +114,18 @@ export default function CameraFeed({
               setStreamStatus('connected');
             });
           }
+          if (miniVideoRef.current) {
+            miniVideoRef.current.srcObject = remoteStream;
+            miniVideoRef.current.muted = true;
+            miniVideoRef.current.play().catch(() => {});
+          }
           setStreamStatus('connected');
         });
 
         call.on('close', () => {
+          remoteStreamRef.current = null;
+          if (videoRef.current) videoRef.current.srcObject = null;
+          if (miniVideoRef.current) miniVideoRef.current.srcObject = null;
           setStreamStatus('waiting');
           setStatusMessage('Phone disconnected');
         });
@@ -145,6 +162,52 @@ export default function CameraFeed({
     };
   }, [roomCode]);
 
+  // Scroll detection via IntersectionObserver to auto-dock mini-HUD
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const away = !entry.isIntersecting || entry.intersectionRatio < 0.2;
+        setIsScrolledOut(away);
+        if (!away) {
+          setIsFloatingDismissed(false);
+        }
+      },
+      { threshold: [0, 0.2, 0.5] }
+    );
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  // When floating mini player mounts or stream becomes available
+  useEffect(() => {
+    if (isScrolledOut && !isFloatingDismissed && miniVideoRef.current && remoteStreamRef.current) {
+      miniVideoRef.current.srcObject = remoteStreamRef.current;
+      miniVideoRef.current.muted = true;
+      miniVideoRef.current.play().catch(() => {});
+    }
+  }, [isScrolledOut, isFloatingDismissed]);
+
+  const handleScrollToMain = () => {
+    soundManager.playChirp();
+    if (containerRef.current) {
+      containerRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+
+  const handleNativePiP = async () => {
+    soundManager.playChirp();
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+      } else if (videoRef.current && videoRef.current.requestPictureInPicture) {
+        await videoRef.current.requestPictureInPicture();
+      }
+    } catch (e) {
+      console.warn('PiP error:', e);
+    }
+  };
+
   const toggleFullscreen = () => {
     if (!containerRef.current) return;
     if (!document.fullscreenElement) {
@@ -159,8 +222,12 @@ export default function CameraFeed({
   };
 
   const handleReset = () => {
+    remoteStreamRef.current = null;
     if (videoRef.current) {
       videoRef.current.srcObject = null;
+    }
+    if (miniVideoRef.current) {
+      miniVideoRef.current.srcObject = null;
     }
     setStreamStatus('waiting');
     setStatusMessage('Waiting for smartphone connection...');
@@ -321,6 +388,14 @@ export default function CameraFeed({
             title="Reset video stream"
           >
             <RefreshCw className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            onClick={handleNativePiP}
+            className="p-1.5 rounded-xl bg-[#06090e] hover:bg-slate-800 text-slate-300 hover:text-[#00c2cb] border border-[#162338] transition-colors"
+            title="Pop-out Picture-in-Picture window"
+          >
+            <PictureInPicture2 className="w-3.5 h-3.5" />
           </button>
 
           <button
@@ -674,6 +749,98 @@ export default function CameraFeed({
               CLOSE GALLERY
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Floating Sticky Picture-in-Picture Mini-HUD */}
+      {isScrolledOut && !isFloatingDismissed && (
+        <div className="fixed bottom-5 right-5 z-40 w-72 sm:w-80 rounded-2xl bg-[#0a0f18]/95 backdrop-blur-md border-2 border-[#00c2cb] shadow-2xl shadow-cyan-950/80 overflow-hidden animate-in slide-in-from-bottom-5 duration-300 font-mono">
+          
+          {/* Mini-HUD Header */}
+          <div className="flex items-center justify-between px-3 py-1.5 bg-[#06090e] border-b border-[#162338]">
+            <div 
+              className="flex items-center gap-1.5 cursor-pointer group"
+              onClick={handleScrollToMain}
+              title="Click to scroll smoothly to main camera view"
+            >
+              <span className={`w-2 h-2 rounded-full ${isLive ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`} />
+              <span className="text-[11px] font-bold text-white uppercase tracking-wider group-hover:text-[#00c2cb] transition-colors">
+                LIVE ROVER CAM
+              </span>
+              <span className="text-[9px] px-1.5 py-0.2 rounded bg-[#00c2cb]/20 text-[#00c2cb] border border-[#00c2cb]/40 font-bold">
+                PIP DOCK
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <button
+                onClick={handleScrollToMain}
+                className="p-1 rounded-md hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+                title="Scroll back to main camera"
+              >
+                <ArrowUpRight className="w-3.5 h-3.5 text-[#00c2cb]" />
+              </button>
+              <button
+                onClick={() => setIsFloatingDismissed(true)}
+                className="p-1 rounded-md hover:bg-white/10 text-slate-400 hover:text-rose-400 transition-colors"
+                title="Minimize floating camera (reappears on next scroll)"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Mini Video Viewport */}
+          <div className="relative aspect-video bg-black flex items-center justify-center overflow-hidden group">
+            <video
+              ref={miniVideoRef}
+              autoPlay
+              playsInline
+              muted
+              style={{
+                transform: `scale(${zoomLevel}) ${isFlipped ? 'scaleX(-1)' : ''}`,
+                filter: isNightVision ? 'contrast(135%) brightness(115%) sepia(1) hue-rotate(85deg) saturate(380%)' : 'none',
+                transition: 'transform 0.2s ease, filter 0.2s ease'
+              }}
+              className={`w-full h-full object-cover ${isLive ? 'block' : 'hidden'}`}
+            />
+
+            {/* Standby / Demo view in Mini-HUD */}
+            {!isLive && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center p-2 text-center bg-[#0a0f18]">
+                <img src="/urrt-logo.png" alt="URRT" className="w-8 h-8 rounded-full mb-1" />
+                <span className="text-[10px] text-slate-400 font-tech">STANDBY FEED</span>
+              </div>
+            )}
+
+            {/* Reticle in Mini-HUD */}
+            {overlayMode === 'reticle' && (
+              <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-70">
+                <div className="w-8 h-8 border border-[#00c2cb]/50 rounded-full flex items-center justify-center">
+                  <div className="w-1 h-1 bg-rose-500 rounded-full" />
+                </div>
+              </div>
+            )}
+
+            {/* Live Telemetry Pill */}
+            <div className="absolute top-2 left-2 bg-black/80 px-2 py-0.5 rounded text-[10px] text-[#00c2cb] border border-[#00c2cb]/40 pointer-events-none">
+              {temperature !== null ? `${temperature}°C` : '--'} | {humidity !== null ? `${humidity}%` : '--'}
+            </div>
+
+            {/* Floating Action Controls */}
+            <div className="absolute bottom-2 right-2 flex items-center gap-1">
+              <button
+                onClick={handleCaptureSnapshot}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/90 hover:bg-emerald-400 text-black font-bold text-[10px] shadow-lg transition-transform active:scale-95"
+                title="Capture Snapshot with Watermark"
+              >
+                <CameraIcon className="w-3 h-3" />
+                <span>SNAP</span>
+              </button>
+            </div>
+
+          </div>
+
         </div>
       )}
 
