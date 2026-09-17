@@ -158,15 +158,14 @@ export default function Header({
             </button>
           </div>
 
-          {/* Quick Operator Guide / নির্দেশিকা */}
+          {/* Quick Operator Guide */}
           <button
             onClick={() => { soundManager.playChirp(); onOpenGuide(); }}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#00c2cb]/15 hover:bg-[#00c2cb]/25 border border-[#00c2cb]/40 text-[#00c2cb] font-bold transition-all shadow-[0_0_12px_rgba(0,194,203,0.15)]"
-            title="Open Quick Operator Guide / ব্যবহার নির্দেশিকা"
+            title="Open Quick Operator Guide (G)"
           >
             <HelpCircle className="w-3.5 h-3.5" />
-            <span className="hidden md:inline font-sans text-xs">GUIDE / নির্দেশিকা</span>
-            <span className="md:hidden font-mono text-[11px]">GUIDE</span>
+            <span className="font-mono text-[11px] tracking-wide">GUIDE</span>
           </button>
 
           {/* Mission Debrief Report Button */}

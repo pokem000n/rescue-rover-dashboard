@@ -427,8 +427,8 @@ export default function Dashboard({ onNavigateToCamera }) {
     if (!esp32Online && !isDemoMode) {
       return {
         level: 'danger',
-        title: 'ROVER DISCONNECTED • অফলাইন',
-        subtitle: 'ESP32 সেন্সর কন্ট্রোলার অফলাইন। কেবল বা ওয়াইফাই চেক করুন, অথবা টেস্ট করার জন্য DEMO মোড অন করুন।',
+        title: 'ROVER DISCONNECTED • OFFLINE',
+        subtitle: 'No telemetry signal received from ESP32 controller. Check cables/Wi-Fi or enable DEMO mode above to test.',
         icon: AlertTriangle,
         badge: 'HARDWARE OFFLINE',
         color: 'border-rose-500/40 bg-rose-500/10 text-rose-400',
@@ -438,8 +438,8 @@ export default function Dashboard({ onNavigateToCamera }) {
     if (temperature !== null && temperature >= (thresholds.tempDanger || 40)) {
       return {
         level: 'danger',
-        title: 'CRITICAL OVERHEAT • অতিমাত্রিক তাপ সতর্কতা!',
-        subtitle: `বর্তমান তাপমাত্রা (${temperature.toFixed(1)}°C) বিপদসীমা (${thresholds.tempDanger || 40}°C) ছাড়িয়েছে! রোভার পর্যবেক্ষণ করুন।`,
+        title: 'CRITICAL OVERHEAT • DANGER',
+        subtitle: `Ambient temperature (${temperature.toFixed(1)}°C) exceeded critical threshold (${thresholds.tempDanger || 40}°C)! Inspect rover chassis immediately.`,
         icon: AlertOctagon,
         badge: 'CRITICAL HEAT',
         color: 'border-rose-500/50 bg-rose-500/15 text-rose-300 animate-pulse',
@@ -449,8 +449,8 @@ export default function Dashboard({ onNavigateToCamera }) {
     if (temperature !== null && temperature >= (thresholds.tempWarn || 30)) {
       return {
         level: 'warning',
-        title: 'ELEVATED HEAT DETECTED • উচ্চ তাপমাত্রা বৃদ্ধি',
-        subtitle: `বর্তমান তাপমাত্রা (${temperature.toFixed(1)}°C) প্রাথমিক সতর্কতা সীমা (${thresholds.tempWarn || 30}°C) অতিক্রম করেছে।`,
+        title: 'ELEVATED HEAT DETECTED • WARNING',
+        subtitle: `Ambient temperature (${temperature.toFixed(1)}°C) is above warning threshold (${thresholds.tempWarn || 30}°C). Monitor thermal telemetry.`,
         icon: AlertTriangle,
         badge: 'ELEVATED TEMP',
         color: 'border-amber-500/40 bg-amber-500/10 text-amber-300',
@@ -459,10 +459,10 @@ export default function Dashboard({ onNavigateToCamera }) {
     }
     return {
       level: 'normal',
-      title: 'ALL SYSTEMS NOMINAL • সব সিস্টেম স্বাভাবিক',
+      title: 'ALL SYSTEMS NOMINAL • OPERATIONAL',
       subtitle: isDemoMode
-        ? 'সিমুলেশন মোড সক্রিয়। লাইভ ক্যামেরা ও টেলিমেট্রি স্বাভাবিকভাবে কাজ করছে।'
-        : 'ESP32 হার্ডওয়্যার টেলিমেট্রি লিংক ও লাইভ ক্যামেরা ফিড স্বাভাবিক ও সক্রিয়।',
+        ? 'Simulator active. Live virtual telemetry and camera feeds operating nominally.'
+        : 'ESP32 hardware telemetry stream and live wireless camera feeds fully operational.',
       icon: ShieldCheck,
       badge: isDemoMode ? 'SIMULATOR NOMINAL' : 'TELEMETRY LIVE',
       color: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
@@ -474,11 +474,11 @@ export default function Dashboard({ onNavigateToCamera }) {
   const HealthIcon = roverHealth.icon;
 
   const tabs = [
-    { id: 'mission', label: 'MISSION CONTROL', bangla: 'লাইভ ক্যামেরা ও সেন্সর', icon: Radio },
-    { id: 'logbook', label: 'LOGBOOK & PHOTOS', bangla: 'ভিকটিম লগ ও ছবি', icon: ClipboardList, count: incidents.length },
-    { id: 'threats', label: 'ENVIRONMENT & RISKS', bangla: 'ঝুঁকি ও তাপমাত্রা বিশ্লেষণ', icon: Flame },
-    { id: 'system', label: 'SYSTEM & PACKETS', bangla: 'ডায়াগনস্টিক ও কানেকশন', icon: Cpu },
-    { id: 'all', label: 'VIEW ALL', bangla: 'সবকিছু একসাথে', icon: LayoutGrid }
+    { id: 'mission', label: 'MISSION CONTROL', sublabel: 'Cameras & Live Gauges', icon: Radio },
+    { id: 'logbook', label: 'LOGBOOK & PHOTOS', sublabel: 'Victim Log & Snapshots', icon: ClipboardList, count: incidents.length },
+    { id: 'threats', label: 'ENVIRONMENT & RISKS', sublabel: 'Thermal Threat Matrix', icon: Flame },
+    { id: 'system', label: 'SYSTEM & PACKETS', sublabel: 'Link Health & Diagnostics', icon: Cpu },
+    { id: 'all', label: 'VIEW ALL', sublabel: 'Complete Overview', icon: LayoutGrid }
   ];
 
   return (
@@ -562,7 +562,7 @@ export default function Dashboard({ onNavigateToCamera }) {
               title="Open Quick Operator Guide (G)"
             >
               <HelpCircle className="w-3.5 h-3.5" />
-              <span>নির্দেশিকা (GUIDE)</span>
+              <span>GUIDE (G)</span>
             </button>
           </div>
         </div>
@@ -589,8 +589,8 @@ export default function Dashboard({ onNavigateToCamera }) {
                 <Icon className={`w-4 h-4 ${isActive ? 'text-black' : 'text-[#00c2cb]'}`} />
                 <div className="flex flex-col items-start leading-tight">
                   <span className="tracking-wider">{tab.label}</span>
-                  <span className={`text-[10px] ${isActive ? 'text-black/80 font-sans' : 'text-slate-500 font-sans'}`}>
-                    {tab.bangla}
+                  <span className={`text-[10px] ${isActive ? 'text-black/80 font-mono' : 'text-slate-500 font-mono'}`}>
+                    {tab.sublabel}
                   </span>
                 </div>
                 {tab.count !== undefined && tab.count > 0 && (

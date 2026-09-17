@@ -18,34 +18,34 @@ export default function UserGuideModal({ isOpen, onClose, theme = 'dark' }) {
 
   const steps = [
     {
-      step: '১',
-      title: 'মোবাইল ক্যামেরা কানেক্ট করা (Connect Camera)',
-      desc: 'ক্যামেরা সেকশনে "ADD CAM" বাটনে ক্লিক করুন। প্রদর্শিত QR কোডটি স্মার্টফোনের ক্যামেরা দিয়ে স্ক্যান করুন এবং ব্রাউজারে Camera Permission "Allow" দিন। সাথে সাথে লাইভ ভিডিও ড্যাশবোর্ডে চলে আসবে!',
-      tip: 'একাধিক ফোন দিয়ে CAM 1 (Drive) ও CAM 2 (Arm) একসাথে কানেক্ট করে DUAL SPLIT ভিউ দেখা যাবে।',
+      step: '1',
+      title: 'Pair Wireless Smartphone Camera',
+      desc: 'Click "ADD CAM" in the camera window. Scan the generated QR code with any smartphone and allow camera access. The live video feed connects to the HUD instantly.',
+      tip: 'Pair two phones concurrently as CAM 01 (Drive) and CAM 02 (Arm) to view side-by-side DUAL SPLIT screen.',
       icon: Smartphone,
       color: 'text-[#00c2cb] bg-[#00c2cb]/15 border-[#00c2cb]/30'
     },
     {
-      step: '২',
-      title: 'ম্যাচ টাইমার চালানো (Match Timer)',
-      desc: 'ম্যাচ শুরু হলে কীবোর্ডের Space বাটন বা হেডারে থাকা Play বাটনে চাপ দিন। সময় ৩ মিনিটের নিচে নামলে হলুদ সতর্কতা এবং ১ মিনিটের নিচে নামলে লাল অ্যালার্ম বেজে উঠবে।',
-      tip: 'ড্রপডাউন থেকে ৮ মিনিট (অফিসিয়াল), ৫ মিনিট বা ১০ মিনিট বেছে নেওয়া যায়।',
+      step: '2',
+      title: 'Operate Match Countdown Timer',
+      desc: 'Press SPACEBAR or click the Play button in the header when the match begins. Amber warnings trigger at 3 minutes, with pulsing sirens during the final 60 seconds.',
+      tip: 'Use the duration dropdown to select official RoboCup 8-minute rounds, 5-minute sprints, or 10-minute trials.',
       icon: Timer,
       color: 'text-amber-400 bg-amber-500/15 border-amber-500/30'
     },
     {
-      step: '৩',
-      title: 'ভিকটিম ও হ্যাজার্ড লগ করা (Log Incidents)',
-      desc: 'রোভার এরেনায় ঘোরার সময় ভিকটিম দেখতে পেলে সবুজ "+ VICTIM SIGHTED" বাটনে ক্লিক করুন (বা "S" চেপে ছবি তুলুন)। বাধা বা ধ্বংসস্তূপ দেখলে "+ HAZARD / DEBRIS" চাপুন।',
-      tip: 'প্রতিটি লগে টাইমারের অবশিষ্ট সময় এবং বর্তমান তাপমাত্রা স্বয়ংক্রিয়ভাবে সেভ হয়।',
+      step: '3',
+      title: 'Log Incidents & Capture Snapshots',
+      desc: 'When spotting a survivor, click "+ VICTIM SIGHTED" or press "S" to take an instant timestamped watermarked photo. Tag obstacles with "+ HAZARD / DEBRIS".',
+      tip: 'Every entry records remaining match time, local timestamp, and real-time environmental telemetry.',
       icon: Flag,
       color: 'text-emerald-400 bg-emerald-500/15 border-emerald-500/30'
     },
     {
-      step: '৪',
-      title: 'বিচারকদের রিপোর্ট তৈরি (Export & Debrief)',
-      desc: 'ম্যাচ শেষে হেডারের "DEBRIEF" বাটনে চাপ দিলে বিচারকদের জন্য সুন্দর সামারি সার্টিফিকেট ওপেন হবে। সেখান থেকে "PRINT / PDF" চেপে ১-ক্লিকেই প্রিন্ট বা PDF ডাউনলোড করা যাবে।',
-      tip: 'লগবুক থেকে "EXPORT LOG" চাপলে এক্সেল (.csv) ফাইল হিসেবে সব ডেটা সেভ হবে।',
+      step: '4',
+      title: 'Generate Official Debrief & PDF Report',
+      desc: 'When the match finishes, click "DEBRIEF" (or press "R") to open the mission debrief certificate. Click "PRINT / PDF" for an official report to submit to the judges.',
+      tip: 'In the Logbook tab, click "EXPORT LOG" to download the complete spreadsheet as a CSV file.',
       icon: FileText,
       color: 'text-purple-400 bg-purple-500/15 border-purple-500/30'
     }
@@ -69,16 +69,16 @@ export default function UserGuideModal({ isOpen, onClose, theme = 'dark' }) {
             </div>
             <div>
               <h3 className="text-base font-bold font-tech tracking-wider">
-                UIU RESCUE ROVER - সহজ নির্দেশিকা (QUICK GUIDE)
+                UIU RESCUE ROVER • QUICK OPERATOR GUIDE
               </h3>
               <p className="text-xs text-slate-400 font-mono">
-                যে কেউ এই ৪টি ধাপে সহজেই পুরো ড্যাশবোর্ড পরিচালনা করতে পারবেন
+                Essential 4-step workflow for operating the mission control system
               </p>
             </div>
           </div>
           <button 
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-black/10 text-slate-400 hover:text-white transition-colors"
+            className="p-1.5 rounded-lg hover:bg-black/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -133,9 +133,9 @@ export default function UserGuideModal({ isOpen, onClose, theme = 'dark' }) {
           </span>
           <button
             onClick={onClose}
-            className="px-5 py-2 rounded-xl bg-[#00c2cb] hover:bg-[#00e5ff] text-black font-bold shadow-md shadow-cyan-500/20 transition-all"
+            className="px-5 py-2 rounded-xl bg-[#00c2cb] hover:bg-[#00e5ff] text-black font-bold shadow-md shadow-cyan-500/20 transition-all cursor-pointer"
           >
-            বুঝেছি / GOT IT
+            GOT IT
           </button>
         </div>
 
