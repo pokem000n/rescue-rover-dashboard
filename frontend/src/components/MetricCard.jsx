@@ -42,7 +42,7 @@ export default function MetricCard({
       gaugePercent = 0;
       statusBadge = { label: 'NO DATA', color: 'text-slate-400 bg-slate-800 border-slate-700' };
     } else if (numericValue < 18) {
-      statusBadge = { label: 'COOL', color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30' };
+      statusBadge = { label: 'COOL', color: 'text-[#00c2cb] bg-[#00c2cb]/10 border-[#00c2cb]/30' };
       gaugePercent = Math.max(10, ((numericValue) / 50) * 100);
     } else if (numericValue <= 32) {
       statusBadge = { label: 'NOMINAL', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' };
@@ -66,7 +66,7 @@ export default function MetricCard({
       statusBadge = { label: 'OPTIMAL', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' };
       gaugePercent = numericValue;
     } else if (numericValue <= 80) {
-      statusBadge = { label: 'ELEVATED', color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30' };
+      statusBadge = { label: 'ELEVATED', color: 'text-[#00c2cb] bg-[#00c2cb]/10 border-[#00c2cb]/30' };
       gaugePercent = numericValue;
     } else {
       statusBadge = { label: 'SATURATED', color: 'text-rose-400 bg-rose-500/10 border-rose-500/30' };
@@ -75,36 +75,40 @@ export default function MetricCard({
   }
 
   return (
-    <div className={`relative overflow-hidden rounded-2xl bg-rover-card border ${
-      isStale ? 'border-amber-500/30' : 'border-rover-border'
-    } p-5 lg:p-6 shadow-xl transition-all duration-300 hover:border-cyan-500/40 group`}>
+    <div className={`relative overflow-hidden rounded-2xl bg-[#0f1624] border ${
+      isStale ? 'border-amber-500/40' : 'border-[#162338]'
+    } p-5 lg:p-6 shadow-xl transition-all duration-300 hover:border-[#00c2cb]/50 hover:shadow-[0_0_25px_rgba(0,194,203,0.12)] group`}>
       
-      {/* Top subtle corner accent */}
-      <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-cyan-500/5 to-transparent pointer-events-none" />
+      {/* Top subtle corner accent in URRT teal */}
+      <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-[#00c2cb]/10 to-transparent pointer-events-none" />
 
       {/* Stale Warning Banner if offline */}
       {isStale && (
-        <div className="mb-3 flex items-center gap-1.5 px-2.5 py-1 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-mono">
+        <div className="mb-3 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-mono">
           <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 animate-bounce" />
-          <span>OFFLINE - DISPLAYING LAST KNOWN VALUE</span>
+          <span>ROVER OFFLINE - SHOWING LAST KNOWN SENSOR VALUE</span>
         </div>
       )}
 
       {/* Card Header */}
       <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-2.5">
+        <div className="flex items-center space-x-3">
           <div className={`p-2.5 rounded-xl border ${
             isTemp 
               ? 'bg-rose-500/10 border-rose-500/30 text-rose-400' 
-              : 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400'
+              : 'bg-[#00c2cb]/10 border-[#00c2cb]/30 text-[#00c2cb]'
           }`}>
             {isTemp ? <Thermometer className="w-5 h-5" /> : <Droplets className="w-5 h-5" />}
           </div>
           <div>
-            <h3 className="text-sm font-semibold tracking-wider font-tech text-slate-300 uppercase">
+            <h3 className="text-sm font-bold font-tech tracking-wider text-slate-200 uppercase">
               {isTemp ? 'Ambient Temperature' : 'Relative Humidity'}
             </h3>
-            <span className="text-[11px] font-mono text-slate-500">SENSOR: DHT11 (GPIO 4)</span>
+            <span className="text-[11px] font-mono text-slate-400 flex items-center gap-1">
+              <span>SENSOR: DHT11</span>
+              <span className="text-slate-600">•</span>
+              <span className="text-[#00c2cb]">GPIO 4</span>
+            </span>
           </div>
         </div>
 
@@ -126,7 +130,7 @@ export default function MetricCard({
         </div>
 
         {/* Trend Indicator */}
-        <div className="flex items-center space-x-1 text-xs font-mono px-2 py-1 rounded bg-rover-dark/70 border border-rover-border">
+        <div className="flex items-center space-x-1.5 text-xs font-mono px-2.5 py-1 rounded-lg bg-[#06090e] border border-[#162338]">
           {trend === 'rising' && (
             <>
               <TrendingUp className="w-3.5 h-3.5 text-rose-400" />
@@ -135,8 +139,8 @@ export default function MetricCard({
           )}
           {trend === 'falling' && (
             <>
-              <TrendingDown className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="text-cyan-400 font-medium">FALLING</span>
+              <TrendingDown className="w-3.5 h-3.5 text-[#00c2cb]" />
+              <span className="text-[#00c2cb] font-medium">FALLING</span>
             </>
           )}
           {trend === 'steady' && (
@@ -150,12 +154,12 @@ export default function MetricCard({
 
       {/* Gauge Bar */}
       <div className="my-3.5">
-        <div className="w-full h-2 rounded-full bg-slate-800/80 overflow-hidden border border-slate-700/50">
+        <div className="w-full h-2 rounded-full bg-[#06090e] overflow-hidden border border-[#162338]">
           <div 
             className={`h-full transition-all duration-700 ease-out rounded-full ${
               isTemp 
-                ? 'bg-gradient-to-r from-cyan-500 via-emerald-400 to-rose-500' 
-                : 'bg-gradient-to-r from-blue-500 via-cyan-400 to-teal-300'
+                ? 'bg-gradient-to-r from-[#00c2cb] via-emerald-400 to-rose-500' 
+                : 'bg-gradient-to-r from-[#00a8b5] via-[#00c2cb] to-[#00e5ff]'
             }`}
             style={{ width: `${Math.min(100, Math.max(3, gaugePercent))}%` }}
           />
@@ -163,17 +167,17 @@ export default function MetricCard({
       </div>
 
       {/* Statistics Footer */}
-      <div className="pt-3 border-t border-rover-border/60 grid grid-cols-3 gap-2 text-center text-xs font-mono">
-        <div className="bg-rover-dark/50 rounded-lg p-1.5 border border-rover-border/40">
-          <span className="text-[10px] text-slate-500 block uppercase">Min</span>
+      <div className="pt-3 border-t border-[#162338] grid grid-cols-3 gap-2 text-center text-xs font-mono">
+        <div className="bg-[#06090e]/80 rounded-xl p-2 border border-[#162338]">
+          <span className="text-[10px] text-slate-400 block uppercase">Min</span>
           <span className="text-slate-200 font-semibold">{minVal} {unit}</span>
         </div>
-        <div className="bg-rover-dark/50 rounded-lg p-1.5 border border-rover-border/40">
-          <span className="text-[10px] text-slate-500 block uppercase">Avg</span>
-          <span className="text-cyan-300 font-semibold">{avgVal} {unit}</span>
+        <div className="bg-[#06090e]/80 rounded-xl p-2 border border-[#162338]">
+          <span className="text-[10px] text-slate-400 block uppercase">Session Avg</span>
+          <span className="text-[#00c2cb] font-semibold">{avgVal} {unit}</span>
         </div>
-        <div className="bg-rover-dark/50 rounded-lg p-1.5 border border-rover-border/40">
-          <span className="text-[10px] text-slate-500 block uppercase">Max</span>
+        <div className="bg-[#06090e]/80 rounded-xl p-2 border border-[#162338]">
+          <span className="text-[10px] text-slate-400 block uppercase">Max</span>
           <span className="text-slate-200 font-semibold">{maxVal} {unit}</span>
         </div>
       </div>

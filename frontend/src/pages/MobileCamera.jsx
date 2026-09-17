@@ -103,7 +103,6 @@ export default function MobileCamera() {
         const call = peer.call(targetRoom, stream);
         callRef.current = call;
 
-        // When call is connected
         setIsConnectedToDashboard(true);
         setStatusText('STREAMING LIVE TO DASHBOARD');
 
@@ -174,21 +173,24 @@ export default function MobileCamera() {
     <div className="min-h-screen bg-black text-white flex flex-col font-sans select-none">
       
       {/* Mobile Top App Bar */}
-      <header className="px-4 py-3 bg-rover-panel/90 border-b border-rover-border flex items-center justify-between z-20">
-        <div className="flex items-center space-x-2">
+      <header className="px-4 py-3 bg-[#0a0f18]/95 border-b border-[#162338] flex items-center justify-between z-20">
+        <div className="flex items-center space-x-2.5">
           <a
             href="/"
-            className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white"
+            className="p-1.5 rounded-xl bg-[#162338] text-slate-300 hover:text-white"
           >
             <ArrowLeft className="w-5 h-5" />
           </a>
-          <div>
-            <h1 className="text-sm font-bold font-tech tracking-wider text-slate-100 flex items-center gap-1.5">
-              ROVER CAM BROADCASTER
-            </h1>
-            <span className="text-[10px] font-mono text-slate-400">
-              UIU RESCUE ROVER WIRELESS LINK
-            </span>
+          <div className="flex items-center gap-2">
+            <img src="/urrt-logo.png" alt="URRT Logo" className="w-8 h-8 rounded-full border border-[#00c2cb]" />
+            <div>
+              <h1 className="text-xs sm:text-sm font-bold font-tech tracking-wider text-white flex items-center gap-1.5">
+                ROVER CAM BROADCASTER
+              </h1>
+              <span className="text-[10px] font-mono text-[#00c2cb]">
+                UIU RESCUE ROVER TEAM • #URRT
+              </span>
+            </div>
           </div>
         </div>
 
@@ -198,10 +200,10 @@ export default function MobileCamera() {
             ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' 
             : isBroadcasting
             ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-            : 'bg-slate-800 text-slate-400 border-slate-700'
+            : 'bg-[#162338] text-slate-400 border-slate-700'
         }`}>
           <Radio className={`w-3 h-3 ${isConnectedToDashboard ? 'animate-pulse text-emerald-400' : ''}`} />
-          <span>{isConnectedToDashboard ? 'TRANSMITTING' : isBroadcasting ? 'CONNECTING' : 'IDLE'}</span>
+          <span>{isConnectedToDashboard ? 'ON AIR' : isBroadcasting ? 'CONNECTING' : 'READY'}</span>
         </div>
       </header>
 
@@ -220,19 +222,21 @@ export default function MobileCamera() {
         {/* Standby View */}
         {!isBroadcasting && (
           <div className="text-center p-6 max-w-sm w-full">
-            <div className="w-20 h-20 rounded-3xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 mx-auto flex items-center justify-center mb-4 shadow-lg shadow-cyan-500/10">
-              <Camera className="w-10 h-10 animate-pulse" />
+            <div className="relative mx-auto w-24 h-24 mb-4">
+              <div className="w-full h-full rounded-full p-0.5 bg-gradient-to-tr from-[#00a8b5] to-[#00e5ff] shadow-[0_0_25px_rgba(0,194,203,0.45)]">
+                <img src="/urrt-logo.png" alt="URRT Logo" className="w-full h-full rounded-full object-cover bg-black" />
+              </div>
             </div>
             
             <h2 className="text-lg font-bold font-tech tracking-wide text-white mb-1">
-              WIRELESS ROVER CAMERA
+              UIU RESCUE ROVER CAMERA
             </h2>
             <p className="text-xs text-slate-400 font-mono mb-4 leading-relaxed">
-              Stream live video from this phone directly to the UIU Rescue Rover mission control dashboard.
+              Stream live video from this phone directly to the UIU Rescue Rover (#URRT) mission control dashboard.
             </p>
 
             {/* Room Code input */}
-            <div className="mb-5 bg-rover-panel/80 p-3 rounded-xl border border-rover-border text-left">
+            <div className="mb-5 bg-[#0a0f18] p-3 rounded-xl border border-[#162338] text-left">
               <label className="text-[10px] font-mono text-slate-400 block mb-1">
                 DASHBOARD CHANNEL ID:
               </label>
@@ -241,13 +245,13 @@ export default function MobileCamera() {
                 value={targetRoom}
                 onChange={(e) => setTargetRoom(e.target.value.trim())}
                 placeholder="Scanned from QR code"
-                className="bg-rover-dark border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-cyan-300 w-full focus:outline-none focus:border-cyan-400"
+                className="bg-[#06090e] border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-[#00c2cb] w-full focus:outline-none focus:border-[#00c2cb]"
               />
             </div>
 
             <button
               onClick={handleStartBroadcast}
-              className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-black font-extrabold font-tech tracking-wider text-base shadow-xl shadow-emerald-500/25 flex items-center justify-center gap-2 active:scale-95 transition-all"
+              className="w-full py-4 rounded-2xl bg-gradient-to-r from-[#00a8b5] to-[#00c2cb] hover:from-[#00c2cb] hover:to-[#00e5ff] text-black font-extrabold font-tech tracking-wider text-base shadow-xl shadow-[#00c2cb]/25 flex items-center justify-center gap-2 active:scale-95 transition-all"
             >
               <Video className="w-5 h-5" />
               <span>START BROADCASTING</span>
@@ -259,19 +263,19 @@ export default function MobileCamera() {
         {isBroadcasting && (
           <div className="absolute inset-0 pointer-events-none p-4 flex flex-col justify-between text-xs font-mono">
             <div className="flex justify-between items-start">
-              <div className="bg-black/60 backdrop-blur px-2.5 py-1 rounded border border-cyan-500/30 text-cyan-300">
+              <div className="bg-black/70 backdrop-blur px-2.5 py-1 rounded-lg border border-[#00c2cb]/30 text-[#00c2cb]">
                 LENS: {facingMode === 'environment' ? 'REAR WIDE' : 'FRONT'}
               </div>
-              <div className={`backdrop-blur px-2.5 py-1 rounded font-bold flex items-center gap-1.5 ${
-                isConnectedToDashboard ? 'bg-rose-500/80 text-white animate-pulse' : 'bg-amber-500/80 text-black'
+              <div className={`backdrop-blur px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5 ${
+                isConnectedToDashboard ? 'bg-rose-600/90 text-white animate-pulse' : 'bg-amber-500/80 text-black'
               }`}>
                 <Radio className="w-3.5 h-3.5" />
-                <span>{isConnectedToDashboard ? 'LIVE ON AIR' : 'CALLING...'}</span>
+                <span>{isConnectedToDashboard ? 'LIVE ON AIR • #URRT' : 'CALLING...'}</span>
               </div>
             </div>
 
             <div className="flex justify-between items-end">
-              <div className="bg-black/70 backdrop-blur px-2.5 py-1 rounded border border-white/20 text-slate-200">
+              <div className="bg-black/70 backdrop-blur px-2.5 py-1 rounded-lg border border-white/20 text-slate-200">
                 {statusText}
               </div>
             </div>
@@ -289,10 +293,10 @@ export default function MobileCamera() {
 
       {/* Mobile Bottom Action Bar */}
       {isBroadcasting && (
-        <footer className="p-4 bg-rover-panel/90 border-t border-rover-border flex items-center justify-around z-20">
+        <footer className="p-4 bg-[#0a0f18]/95 border-t border-[#162338] flex items-center justify-around z-20">
           <button
             onClick={handleFlipCamera}
-            className="p-3.5 rounded-2xl bg-slate-800 text-cyan-400 border border-slate-700 active:scale-90 transition-transform"
+            className="p-3.5 rounded-2xl bg-[#162338] text-[#00c2cb] border border-slate-700 active:scale-90 transition-transform"
             title="Switch front/back camera"
           >
             <FlipHorizontal className="w-6 h-6" />

@@ -242,8 +242,9 @@ export default function Dashboard({ onNavigateToCamera }) {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-rover-border py-4 px-6 bg-rover-panel/50 text-center font-mono text-xs text-slate-500">
-        UIU RESCUE ROVER TEAM • ROBOCUP JUNIOR RESCUE ROVER MONITORING PLATFORM • TASK-3
+      <footer className="border-t border-[#162338] py-4 px-6 bg-[#0a0f18]/80 text-center font-mono text-xs text-slate-400 flex items-center justify-center gap-2.5">
+        <img src="/urrt-logo.png" alt="URRT Logo" className="w-5 h-5 rounded-full border border-[#00c2cb]/40" />
+        <span>UIU RESCUE ROVER TEAM (#URRT) • ROBOCUP RESCUE ROVER MISSION CONTROL</span>
       </footer>
     </div>
   );

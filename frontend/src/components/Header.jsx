@@ -1,11 +1,8 @@
 import React from 'react';
 import { 
-  Activity, 
-  Radio, 
   Wifi, 
   WifiOff, 
   Clock, 
-  Cpu, 
   Camera, 
   Sparkles,
   Power
@@ -28,44 +25,51 @@ export default function Header({
   };
 
   return (
-    <header className="border-b border-rover-border bg-rover-panel/80 backdrop-blur-md sticky top-0 z-30 px-4 lg:px-8 py-3.5 shadow-xl">
+    <header className="border-b border-[#162338] bg-[#0a0f18]/90 backdrop-blur-md sticky top-0 z-30 px-4 lg:px-8 py-3 shadow-2xl shadow-black/40">
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         
-        {/* Brand & Mission Title */}
+        {/* Official UIU Rescue Rover Team (#URRT) Brand */}
         <div className="flex items-center space-x-3.5">
-          <div className="relative">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-emerald-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-inner">
-              <Activity className="w-5 h-5 animate-pulse" />
+          <div className="relative group cursor-pointer">
+            {/* Illuminated Outer Ring matching Emblem border */}
+            <div className="w-12 h-12 rounded-full p-0.5 bg-gradient-to-tr from-[#00a8b5] to-[#00e5ff] shadow-[0_0_15px_rgba(0,194,203,0.4)] group-hover:shadow-[0_0_22px_rgba(0,194,203,0.7)] transition-all">
+              <img 
+                src="/urrt-logo.png" 
+                alt="UIU Rescue Rover Team Logo" 
+                className="w-full h-full rounded-full object-cover bg-black"
+              />
             </div>
-            {/* Status pip */}
-            <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-rover-panel ${
-              esp32Online ? 'bg-emerald-400' : 'bg-rose-500'
+            {/* Live Hardware Status Pip */}
+            <span className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-[#0a0f18] ${
+              esp32Online ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'
             }`} />
           </div>
 
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl md:text-2xl font-bold font-tech tracking-wider text-slate-100 flex items-center gap-2">
-                UIU RESCUE ROVER
-                <span className="text-xs font-mono font-normal px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-300">
-                  RCJ-TASK-3
-                </span>
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-xl md:text-2xl font-bold font-tech tracking-wider text-white drop-shadow-sm">
+                UIU RESCUE ROVER TEAM
               </h1>
+              <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-[#00c2cb]/15 border border-[#00c2cb]/40 text-[#00c2cb] tracking-wider">
+                #URRT
+              </span>
             </div>
-            <p className="text-xs text-slate-400 tracking-widest font-mono uppercase">
-              REAL-TIME ENVIRONMENT MONITORING
+            <p className="text-[11px] text-slate-400 tracking-widest font-mono uppercase mt-0.5 flex items-center gap-2">
+              <span>REAL-TIME ENVIRONMENT MONITORING</span>
+              <span className="w-1 h-1 rounded-full bg-[#00c2cb]/60 inline-block"></span>
+              <span className="text-[#00c2cb]">MISSION HUD</span>
             </p>
           </div>
         </div>
 
         {/* Telemetry Status Bar & Actions */}
-        <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 text-xs font-mono">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 text-xs font-mono">
           
           {/* ESP32 Hardware Status Badge */}
-          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all ${
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all ${
             esp32Online 
-              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300 glow-emerald' 
-              : 'bg-rose-500/10 border-rose-500/30 text-rose-400 glow-red'
+              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.2)]' 
+              : 'bg-rose-500/10 border-rose-500/30 text-rose-400 shadow-[0_0_12px_rgba(239,68,68,0.2)]'
           }`}>
             <span className="relative flex h-2 w-2">
               {esp32Online && (
@@ -80,18 +84,18 @@ export default function Header({
             </span>
           </div>
 
-          {/* WebSocket Status Badge */}
-          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${
+          {/* WebSocket Link Status Badge */}
+          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border ${
             wsStatus === 'connected'
-              ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-300'
+              ? 'bg-[#00c2cb]/10 border-[#00c2cb]/30 text-[#00c2cb]'
               : wsStatus === 'connecting'
               ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
-              : 'bg-slate-800 border-slate-700 text-slate-400'
+              : 'bg-slate-900 border-slate-800 text-slate-400'
           }`}>
             {wsStatus === 'connected' ? (
-              <Wifi className="w-3.5 h-3.5 text-cyan-400" />
+              <Wifi className="w-3.5 h-3.5 text-[#00c2cb]" />
             ) : (
-              <WifiOff className="w-3.5 h-3.5 text-slate-400" />
+              <WifiOff className="w-3.5 h-3.5 text-slate-500" />
             )}
             <span className="uppercase tracking-wider">
               WS: {wsStatus}
@@ -99,27 +103,27 @@ export default function Header({
           </div>
 
           {/* Timestamp Badge */}
-          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rover-card border border-rover-border text-slate-300">
-            <Clock className="w-3.5 h-3.5 text-slate-400" />
-            <span>UPDATED:</span>
-            <span className="text-cyan-300 font-semibold">{formatTime(lastUpdated)}</span>
+          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#0f1624] border border-[#162338] text-slate-300">
+            <Clock className="w-3.5 h-3.5 text-[#00c2cb]/70" />
+            <span className="text-slate-400">UPDATED:</span>
+            <span className="text-white font-semibold">{formatTime(lastUpdated)}</span>
           </div>
 
           {/* Mobile Camera Link Button */}
           <button
             onClick={onOpenMobileCamera}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#00a8b5]/20 to-[#00c2cb]/10 border border-[#00c2cb]/40 text-[#00c2cb] hover:bg-[#00c2cb]/20 transition-all hover:shadow-[0_0_15px_rgba(0,194,203,0.3)] font-semibold"
             title="Open Mobile Camera Broadcaster Link"
           >
-            <Camera className="w-3.5 h-3.5" />
+            <Camera className="w-3.5 h-3.5 text-[#00c2cb]" />
             <span>CONNECT PHONE</span>
           </button>
 
           {/* Demo Mode Switcher */}
-          <div className="flex items-center rounded-lg border border-rover-border overflow-hidden bg-rover-dark p-0.5">
+          <div className="flex items-center rounded-xl border border-[#162338] overflow-hidden bg-[#06090e] p-0.5">
             <button
               onClick={onToggleDemoMode}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all font-sans font-semibold ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg transition-all font-sans font-semibold ${
                 isDemoMode 
                   ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm' 
                   : 'text-slate-400 hover:text-slate-200'
@@ -132,7 +136,7 @@ export default function Header({
             {isDemoMode && (
               <button
                 onClick={onToggleSimulatedRover}
-                className={`ml-1 px-2 py-1 rounded transition-colors text-[10px] font-mono flex items-center gap-1 ${
+                className={`ml-1 px-2 py-1 rounded-md transition-colors text-[10px] font-mono flex items-center gap-1 ${
                   isSimulatedOnline 
                     ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30' 
                     : 'bg-rose-500/20 text-rose-300 hover:bg-rose-500/30'

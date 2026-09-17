@@ -30,7 +30,7 @@ export default function CameraFeed({ isDemoMode }) {
   const [roomCode] = useState(() => {
     const existing = sessionStorage.getItem('rover_channel_id');
     if (existing) return existing;
-    const newId = 'uiu-' + Math.random().toString(36).substring(2, 7);
+    const newId = 'urrt-' + Math.random().toString(36).substring(2, 7);
     sessionStorage.setItem('rover_channel_id', newId);
     return newId;
   });
@@ -96,12 +96,10 @@ export default function CameraFeed({ isDemoMode }) {
       });
 
       peerInstance.on('disconnected', () => {
-        console.log('[CameraFeed] Broker connection dropped, auto-reconnecting...');
+        console.log('[CameraFeed] Broker dropped, auto-reconnecting...');
         try {
           peerInstance.reconnect();
-        } catch (e) {
-          console.warn('[CameraFeed] Reconnect note:', e);
-        }
+        } catch (e) {}
       });
 
       peerInstance.on('error', (err) => {
@@ -149,22 +147,22 @@ export default function CameraFeed({ isDemoMode }) {
   return (
     <div 
       ref={containerRef}
-      className={`relative rounded-2xl bg-rover-card border border-rover-border overflow-hidden shadow-2xl flex flex-col transition-all ${
+      className={`relative rounded-2xl bg-[#0f1624] border border-[#162338] overflow-hidden shadow-2xl flex flex-col transition-all ${
         isFullscreen ? 'fixed inset-0 z-50 rounded-none bg-black' : 'h-full min-h-[380px] lg:min-h-[440px]'
       }`}
     >
       {/* Top Telemetry Header */}
-      <div className="flex items-center justify-between px-4 py-3 bg-rover-panel/90 border-b border-rover-border z-10">
+      <div className="flex items-center justify-between px-4 py-3 bg-[#0a0f18]/95 border-b border-[#162338] z-10">
         <div className="flex items-center space-x-2.5">
           <div className={`p-1.5 rounded-lg border ${
             isLive 
               ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400' 
-              : 'bg-slate-800 border-slate-700 text-slate-400'
+              : 'bg-[#00c2cb]/10 border-[#00c2cb]/30 text-[#00c2cb]'
           }`}>
             <Video className="w-4 h-4" />
           </div>
           <div>
-            <h2 className="text-sm font-bold font-tech tracking-wider text-slate-100 flex items-center gap-2 uppercase">
+            <h2 className="text-sm font-bold font-tech tracking-wider text-white flex items-center gap-2 uppercase">
               LIVE ROVER CAMERA
               {isLive ? (
                 <span className="flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 animate-pulse">
@@ -175,7 +173,7 @@ export default function CameraFeed({ isDemoMode }) {
                   CONNECTING...
                 </span>
               ) : (
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#06090e] text-slate-400 border border-[#162338]">
                   {isDemoMode ? 'SIMULATION MODE' : 'STANDBY'}
                 </span>
               )}
@@ -187,7 +185,7 @@ export default function CameraFeed({ isDemoMode }) {
         <div className="flex items-center space-x-1.5 font-mono text-xs">
           <button
             onClick={() => setShowPairModal(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 transition-colors"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-gradient-to-r from-[#00a8b5]/20 to-[#00c2cb]/10 hover:bg-[#00c2cb]/20 border border-[#00c2cb]/40 text-[#00c2cb] transition-colors"
             title="Scan QR Code to stream from smartphone"
           >
             <QrCode className="w-3.5 h-3.5" />
@@ -196,7 +194,7 @@ export default function CameraFeed({ isDemoMode }) {
 
           <button
             onClick={handleReset}
-            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
+            className="p-1.5 rounded-xl bg-[#06090e] hover:bg-slate-800 text-slate-300 border border-[#162338] transition-colors"
             title="Reset video stream"
           >
             <RefreshCw className="w-3.5 h-3.5" />
@@ -204,7 +202,7 @@ export default function CameraFeed({ isDemoMode }) {
 
           <button
             onClick={toggleFullscreen}
-            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
+            className="p-1.5 rounded-xl bg-[#06090e] hover:bg-slate-800 text-slate-300 border border-[#162338] transition-colors"
             title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
           >
             {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
@@ -226,27 +224,35 @@ export default function CameraFeed({ isDemoMode }) {
 
         {/* Fallback Standby / Demo View when no phone camera is connected */}
         {!isLive && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-gradient-to-b from-[#0e1424] to-[#080c14]">
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-gradient-to-b from-[#0a0f18] via-[#06090e] to-black">
             
             {/* Tactical Crosshair / HUD Overlay */}
-            <div className="absolute inset-4 border border-cyan-500/20 pointer-events-none rounded-xl">
-              <div className="absolute -top-1 -left-1 w-3 h-3 border-t-2 border-l-2 border-cyan-400" />
-              <div className="absolute -top-1 -right-1 w-3 h-3 border-t-2 border-r-2 border-cyan-400" />
-              <div className="absolute -bottom-1 -left-1 w-3 h-3 border-b-2 border-l-2 border-cyan-400" />
-              <div className="absolute -bottom-1 -right-1 w-3 h-3 border-b-2 border-r-2 border-cyan-400" />
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 border border-dashed border-cyan-500/30 rounded-full" />
+            <div className="absolute inset-4 border border-[#00c2cb]/20 pointer-events-none rounded-2xl">
+              <div className="absolute -top-1 -left-1 w-3.5 h-3.5 border-t-2 border-l-2 border-[#00c2cb]" />
+              <div className="absolute -top-1 -right-1 w-3.5 h-3.5 border-t-2 border-r-2 border-[#00c2cb]" />
+              <div className="absolute -bottom-1 -left-1 w-3.5 h-3.5 border-b-2 border-l-2 border-[#00c2cb]" />
+              <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 border-b-2 border-r-2 border-[#00c2cb]" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 border border-dashed border-[#00c2cb]/30 rounded-full animate-spin-slow" />
             </div>
 
             <div className="relative z-10 max-w-md">
-              <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 mx-auto flex items-center justify-center mb-3 shadow-inner">
-                {streamStatus === 'connecting' ? (
-                  <Loader2 className="w-7 h-7 animate-spin text-amber-400" />
-                ) : (
-                  <Smartphone className="w-7 h-7 animate-bounce" />
+              {/* Official UIU Rescue Rover Team Logo Badge in Viewfinder */}
+              <div className="relative mx-auto w-20 h-20 mb-3 group">
+                <div className="w-full h-full rounded-full p-0.5 bg-gradient-to-tr from-[#00a8b5] to-[#00e5ff] shadow-[0_0_25px_rgba(0,194,203,0.45)]">
+                  <img 
+                    src="/urrt-logo.png" 
+                    alt="UIU Rescue Rover Team" 
+                    className="w-full h-full rounded-full object-cover bg-black"
+                  />
+                </div>
+                {streamStatus === 'connecting' && (
+                  <div className="absolute inset-0 rounded-full bg-black/60 flex items-center justify-center">
+                    <Loader2 className="w-8 h-8 animate-spin text-[#00c2cb]" />
+                  </div>
                 )}
               </div>
 
-              <h3 className="text-base font-bold font-tech text-slate-200 tracking-wider mb-1">
+              <h3 className="text-base font-bold font-tech text-white tracking-wider mb-1">
                 {streamStatus === 'connecting' ? 'CONNECTING PHONE STREAM...' : 'NO WIRELESS CAMERA CONNECTED'}
               </h3>
               
@@ -257,20 +263,22 @@ export default function CameraFeed({ isDemoMode }) {
               <div className="flex flex-wrap justify-center gap-2">
                 <button
                   onClick={() => setShowPairModal(true)}
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-semibold text-xs font-tech tracking-wider flex items-center gap-2 shadow-lg shadow-cyan-500/20 transition-all"
+                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#00a8b5] to-[#00c2cb] hover:from-[#00c2cb] hover:to-[#00e5ff] text-black font-bold text-xs font-tech tracking-wider flex items-center gap-2 shadow-lg shadow-[#00c2cb]/20 transition-all"
                 >
                   <QrCode className="w-4 h-4" />
                   <span>PAIR PHONE CAMERA</span>
                 </button>
 
-                <a
-                  href={`/camera?room=${roomCode}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="px-3 py-2 rounded-xl bg-rover-card hover:bg-rover-border border border-rover-border text-slate-300 text-xs font-mono flex items-center gap-1.5 transition-colors"
-                >
-                  <span>TEST IN NEW TAB</span>
-                </a>
+                {roomCode && (
+                  <a
+                    href={`/camera?room=${roomCode}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3.5 py-2.5 rounded-xl bg-[#06090e] hover:bg-slate-800 border border-[#162338] text-slate-300 text-xs font-mono flex items-center gap-1.5 transition-colors"
+                  >
+                    <span>TEST IN NEW TAB</span>
+                  </a>
+                )}
               </div>
             </div>
 
@@ -279,23 +287,24 @@ export default function CameraFeed({ isDemoMode }) {
 
         {/* HUD Telemetry Overlay on Live Stream */}
         {isLive && (
-          <div className="absolute inset-0 pointer-events-none p-4 flex flex-col justify-between text-[11px] font-mono text-cyan-400/80">
+          <div className="absolute inset-0 pointer-events-none p-4 flex flex-col justify-between text-[11px] font-mono text-[#00c2cb]">
             <div className="flex justify-between items-start">
-              <div className="bg-black/60 backdrop-blur px-2.5 py-1 rounded border border-cyan-500/30">
-                <span>FPS: 30 | PROTOCOL: WebRTC | P2P LINK</span>
+              <div className="bg-black/70 backdrop-blur px-2.5 py-1 rounded-lg border border-[#00c2cb]/40 flex items-center gap-2">
+                <img src="/urrt-logo.png" alt="URRT" className="w-3.5 h-3.5 rounded-full" />
+                <span>UIU RESCUE ROVER CAM 01</span>
               </div>
-              <div className="bg-black/60 backdrop-blur px-2.5 py-1 rounded border border-emerald-500/30 text-emerald-400 flex items-center gap-1.5">
+              <div className="bg-black/70 backdrop-blur px-2.5 py-1 rounded-lg border border-emerald-500/40 text-emerald-400 flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                <span>FEED ONLINE</span>
+                <span>WIRELESS FEED ONLINE</span>
               </div>
             </div>
 
             <div className="flex justify-between items-end">
-              <div className="bg-black/60 backdrop-blur px-2.5 py-1 rounded border border-cyan-500/30">
-                <span>CHANNEL: {roomCode}</span>
+              <div className="bg-black/70 backdrop-blur px-2.5 py-1 rounded-lg border border-[#00c2cb]/30">
+                <span>FPS: 30 | WEBRTC P2P | RES: 720p</span>
               </div>
-              <div className="bg-black/60 backdrop-blur px-2.5 py-1 rounded border border-cyan-500/30">
-                <span>UIU ROVER CAM 01</span>
+              <div className="bg-black/70 backdrop-blur px-2.5 py-1 rounded-lg border border-[#00c2cb]/30 font-bold text-white">
+                #URRT
               </div>
             </div>
           </div>
@@ -305,8 +314,8 @@ export default function CameraFeed({ isDemoMode }) {
 
       {/* QR Code Phone Pairing Modal */}
       {showPairModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-rover-panel border border-rover-border rounded-2xl max-w-md w-full p-6 relative shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0a0f18] border border-[#162338] rounded-2xl max-w-md w-full p-6 relative shadow-2xl">
             <button
               onClick={() => setShowPairModal(false)}
               className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800"
@@ -315,54 +324,54 @@ export default function CameraFeed({ isDemoMode }) {
             </button>
 
             <div className="text-center mb-4">
-              <div className="w-12 h-12 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 mx-auto flex items-center justify-center mb-2">
-                <QrCode className="w-6 h-6" />
+              <div className="w-14 h-14 rounded-full p-0.5 bg-gradient-to-tr from-[#00a8b5] to-[#00e5ff] mx-auto mb-2 shadow-[0_0_15px_rgba(0,194,203,0.4)]">
+                <img src="/urrt-logo.png" alt="URRT Logo" className="w-full h-full rounded-full object-cover bg-black" />
               </div>
               <h3 className="text-lg font-bold font-tech text-white">
-                WIRELESS MOBILE CAMERA SETUP
+                WIRELESS ROVER CAMERA SETUP
               </h3>
               <p className="text-xs text-slate-400 font-mono mt-1">
-                Scan the QR code below on your smartphone:
+                UIU Rescue Rover Team • #URRT
               </p>
             </div>
 
-            {/* Instant QR Code Display (Never blocks or spins) */}
-            <div className="flex justify-center p-4 bg-white rounded-2xl border-2 border-cyan-400 shadow-lg mx-auto w-fit">
+            {/* Instant QR Code Display */}
+            <div className="flex justify-center p-4 bg-white rounded-2xl border-2 border-[#00c2cb] shadow-lg shadow-[#00c2cb]/20 mx-auto w-fit">
               <QRCodeSVG 
                 value={mobileUrl} 
                 size={180}
                 bgColor="#ffffff"
-                fgColor="#0a0d14"
+                fgColor="#06090e"
                 level="M"
               />
             </div>
 
             <div className="mt-4 text-center">
-              <span className="text-[11px] font-mono text-slate-400">ROVER CHANNEL ID: </span>
-              <span className="text-xs font-mono font-bold text-cyan-300 px-2 py-0.5 bg-black/50 rounded border border-cyan-500/30 select-all uppercase">
+              <span className="text-[11px] font-mono text-slate-400">CHANNEL CODE: </span>
+              <span className="text-xs font-mono font-bold text-[#00c2cb] px-2 py-0.5 bg-black/60 rounded-lg border border-[#00c2cb]/30 select-all uppercase">
                 {roomCode}
               </span>
             </div>
 
             {/* Instructions */}
             <div className="mt-4 space-y-2 text-xs text-slate-300 font-mono">
-              <div className="flex items-start gap-2 bg-rover-dark p-2.5 rounded-lg border border-rover-border">
-                <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-300 flex items-center justify-center font-bold flex-shrink-0">1</span>
-                <span>Open your phone's camera and <strong>scan this QR code</strong>.</span>
+              <div className="flex items-start gap-2 bg-[#06090e] p-2.5 rounded-xl border border-[#162338]">
+                <span className="w-5 h-5 rounded-full bg-[#00c2cb]/20 text-[#00c2cb] flex items-center justify-center font-bold flex-shrink-0">1</span>
+                <span>Open your phone camera and <strong>scan this QR code</strong>.</span>
               </div>
-              <div className="flex items-start gap-2 bg-rover-dark p-2.5 rounded-lg border border-rover-border">
-                <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-300 flex items-center justify-center font-bold flex-shrink-0">2</span>
+              <div className="flex items-start gap-2 bg-[#06090e] p-2.5 rounded-xl border border-[#162338]">
+                <span className="w-5 h-5 rounded-full bg-[#00c2cb]/20 text-[#00c2cb] flex items-center justify-center font-bold flex-shrink-0">2</span>
                 <span>On your phone, tap <strong>"START BROADCASTING"</strong>.</span>
               </div>
-              <div className="flex items-start gap-2 bg-rover-dark p-2.5 rounded-lg border border-rover-border">
-                <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-300 flex items-center justify-center font-bold flex-shrink-0">3</span>
-                <span>Live video will immediately display on this screen!</span>
+              <div className="flex items-start gap-2 bg-[#06090e] p-2.5 rounded-xl border border-[#162338]">
+                <span className="w-5 h-5 rounded-full bg-[#00c2cb]/20 text-[#00c2cb] flex items-center justify-center font-bold flex-shrink-0">3</span>
+                <span>Live video instantly displays on this screen!</span>
               </div>
             </div>
 
             <button
               onClick={() => setShowPairModal(false)}
-              className="mt-4 w-full py-2.5 rounded-xl bg-rover-border hover:bg-slate-700 text-slate-200 font-tech font-semibold text-xs transition-colors"
+              className="mt-4 w-full py-2.5 rounded-xl bg-[#162338] hover:bg-slate-700 text-slate-200 font-tech font-semibold text-xs transition-colors"
             >
               CLOSE PAIRING WINDOW
             </button>
