@@ -95,8 +95,22 @@ export default function CameraFeed({ isDemoMode }) {
         });
       });
 
+      peerInstance.on('disconnected', () => {
+        console.log('[CameraFeed] Broker connection dropped, auto-reconnecting...');
+        try {
+          peerInstance.reconnect();
+        } catch (e) {
+          console.warn('[CameraFeed] Reconnect note:', e);
+        }
+      });
+
       peerInstance.on('error', (err) => {
-        console.warn('[CameraFeed] Peer status:', err);
+        console.warn('[CameraFeed] Peer status:', err.type, err.message);
+        if (err.type === 'disconnected' || (err.message && err.message.toLowerCase().includes('lost connection'))) {
+          setTimeout(() => {
+            try { peerInstance.reconnect(); } catch (e) {}
+          }, 1500);
+        }
       });
     } catch (err) {
       console.error('[CameraFeed] Init error:', err);

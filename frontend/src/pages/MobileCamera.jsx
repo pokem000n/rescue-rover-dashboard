@@ -120,8 +120,24 @@ export default function MobileCamera() {
         });
       });
 
+      peer.on('disconnected', () => {
+        console.log('[MobileCamera] Disconnected from server, auto-reconnecting...');
+        try {
+          peer.reconnect();
+        } catch (e) {
+          console.warn('[MobileCamera] Reconnect error:', e);
+        }
+      });
+
       peer.on('error', (err) => {
-        console.error('[MobileCamera] Peer error:', err);
+        console.warn('[MobileCamera] Peer error:', err);
+        if (err.type === 'disconnected' || (err.message && err.message.toLowerCase().includes('lost connection'))) {
+          setStatusText('Reconnecting to server...');
+          setTimeout(() => {
+            try { peer.reconnect(); } catch (e) {}
+          }, 1500);
+          return;
+        }
         if (err.type === 'peer-unavailable') {
           setErrorMessage(`Dashboard ID not found! Ensure the dashboard page is open in your computer browser.`);
         } else {
