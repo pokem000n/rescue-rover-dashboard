@@ -25,7 +25,8 @@ export default function Header({
   isSimulatedOnline,
   onOpenMobileCamera
 }) {
-  // RoboCup Round Countdown Timer (8:00 minutes = 480 seconds)
+  // RoboCup Round Countdown Timer (Default: 8:00 minutes = 480 seconds per official RCJ rules)
+  const [initialDuration, setInitialDuration] = useState(480);
   const [matchSeconds, setMatchSeconds] = useState(480);
   const [timerActive, setTimerActive] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -58,7 +59,15 @@ export default function Header({
   const resetTimer = () => {
     soundManager.playChirp();
     setTimerActive(false);
-    setMatchSeconds(480);
+    setMatchSeconds(initialDuration);
+  };
+
+  const handleDurationChange = (e) => {
+    const newSec = parseInt(e.target.value, 10);
+    setInitialDuration(newSec);
+    setTimerActive(false);
+    setMatchSeconds(newSec);
+    soundManager.playChirp();
   };
 
   const toggleSound = () => {
@@ -130,13 +139,28 @@ export default function Header({
               : 'bg-[#0f1624] border-[#162338] text-white'
           }`}>
             <Timer className={`w-3.5 h-3.5 ${matchSeconds <= 60 ? 'text-rose-400' : 'text-[#00c2cb]'}`} />
-            <span className="text-[10px] text-slate-400">MATCH:</span>
+            
+            {/* Quick Preset Selector for competition rules */}
+            <select
+              value={initialDuration}
+              onChange={handleDurationChange}
+              className="bg-transparent text-[11px] font-mono text-[#00c2cb] focus:outline-none cursor-pointer border-r border-[#162338] pr-1 mr-0.5 hover:text-cyan-300 transition-colors"
+              title="Select Match Round Duration"
+            >
+              <option value={300} className="bg-[#0a0f18] text-white">5m</option>
+              <option value={480} className="bg-[#0a0f18] text-white">8m (Official)</option>
+              <option value={600} className="bg-[#0a0f18] text-white">10m</option>
+              <option value={720} className="bg-[#0a0f18] text-white">12m</option>
+              <option value={900} className="bg-[#0a0f18] text-white">15m</option>
+              <option value={1200} className="bg-[#0a0f18] text-white">20m</option>
+            </select>
+
             <span className="font-bold text-sm tracking-wider">
               {formatTimer(matchSeconds)}
             </span>
             <button
               onClick={toggleTimer}
-              className="p-1 rounded-md hover:bg-white/10 text-slate-300 transition-colors ml-1"
+              className="p-1 rounded-md hover:bg-white/10 text-slate-300 transition-colors ml-0.5"
               title={timerActive ? 'Pause match timer' : 'Start match timer'}
             >
               {timerActive ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3 text-[#00c2cb]" />}
@@ -144,7 +168,7 @@ export default function Header({
             <button
               onClick={resetTimer}
               className="p-1 rounded-md hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
-              title="Reset timer to 8:00"
+              title={`Reset timer to ${formatTimer(initialDuration)}`}
             >
               <RotateCcw className="w-2.5 h-2.5" />
             </button>
