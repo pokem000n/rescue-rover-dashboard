@@ -1,0 +1,14 @@
+{
+  "name": "rescue-rover-system",
+  "version": "1.0.0",
+  "description": "UIU Rescue Rover - Real-Time Environment Monitoring & Live Camera Platform",
+  "scripts": {
+    "backend:dev": "npm --prefix backend run dev",
+    "backend:start": "npm --prefix backend start",
+    "frontend:dev": "npm --prefix frontend run dev",
+    "frontend:build": "npm --prefix frontend run build"
+  },
+  "keywords": ["esp32", "dht11", "robocup", "rover", "dashboard", "webrtc", "websocket"],
+  "author": "UIU Rescue Rover Team",
+  "license": "MIT"
+}
