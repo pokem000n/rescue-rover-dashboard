@@ -1,4 +1,4 @@
-# UIU Rescue Rover - Real-Time Monitoring Dashboard (Task-3)
+# UIU Rescue Rover - Real-Time Monitoring Dashboard
 
 A mission control dashboard and telemetry pipeline developed for the **UIU Rescue Rover Team** (RoboCup Junior Rescue Rover).
 
