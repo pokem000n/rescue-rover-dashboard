@@ -24,7 +24,8 @@ import {
   Columns,
   Layers,
   ChevronRight,
-  Sparkles
+  Sparkles,
+  Copy
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Peer } from 'peerjs';
@@ -86,6 +87,7 @@ export default function CameraFeed({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showPairModal, setShowPairModal] = useState(false);
   const [pairModalTab, setPairModalTab] = useState('cam1'); // 'cam1' | 'cam2' | 'cam3'
+  const [copiedPairUrl, setCopiedPairUrl] = useState(false);
   const [showGalleryModal, setShowGalleryModal] = useState(false);
   const [snapshots, setSnapshots] = useState([]);
 
@@ -311,7 +313,11 @@ export default function CameraFeed({
   const getPairUrl = (slotId) => {
     if (typeof window === 'undefined') return '';
     const slot = CAM_SLOTS.find(s => s.id === slotId) || CAM_SLOTS[0];
-    return `${window.location.origin}/camera?room=${roomCode}-${slot.subId}&cam=${slotId === 'cam2' ? '2' : slotId === 'cam3' ? '3' : '1'}&name=${encodeURIComponent(slot.role)}`;
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    // Mobile phones cannot open laptop's "localhost", and camera permissions require HTTPS.
+    // Use the live Vercel HTTPS domain when on localhost so smartphones can scan and stream effortlessly.
+    const baseUrl = isLocalhost ? 'https://frontend-alif-af28.vercel.app' : window.location.origin;
+    return `${baseUrl}/camera?room=${roomCode}-${slot.subId}&cam=${slotId === 'cam2' ? '2' : slotId === 'cam3' ? '3' : '1'}&name=${encodeURIComponent(slot.role)}`;
   };
 
   return (
@@ -842,11 +848,36 @@ export default function CameraFeed({
                 ASSIGNED ROLE: {CAM_SLOTS.find(s => s.id === pairModalTab)?.role}
               </span>
               <p className="text-[11px] text-slate-400 font-mono">
-                Connect multiple phones concurrently to stream front and arm feeds together!
+                Scan QR code with phone camera, or copy link to open in mobile browser:
               </p>
             </div>
 
-            <div className="mt-4 flex gap-2">
+            {/* Direct Copyable Link Box */}
+            <div className="mt-3 flex items-center gap-1.5 p-2 rounded-xl bg-[#06090e] border border-[#162338]">
+              <input
+                type="text"
+                readOnly
+                value={getPairUrl(pairModalTab)}
+                className="bg-transparent text-[11px] font-mono text-slate-300 w-full focus:outline-none truncate select-all px-1"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    navigator.clipboard.writeText(getPairUrl(pairModalTab));
+                    setCopiedPairUrl(true);
+                    setTimeout(() => setCopiedPairUrl(false), 2000);
+                    soundManager.playChirp();
+                  } catch (e) {}
+                }}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#00c2cb]/15 hover:bg-[#00c2cb]/25 text-[#00c2cb] font-mono text-[10px] font-bold transition-all flex-shrink-0 cursor-pointer"
+              >
+                {copiedPairUrl ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedPairUrl ? 'COPIED' : 'COPY'}</span>
+              </button>
+            </div>
+
+            <div className="mt-3 flex gap-2">
               <a
                 href={getPairUrl(pairModalTab)}
                 target="_blank"
