@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { X, Sliders, RotateCcw, Check, AlertTriangle, Thermometer, Droplets } from 'lucide-react';
+import { X, Sliders, RotateCcw, Check, AlertTriangle, Thermometer, Droplets, Wifi } from 'lucide-react';
 import { DEFAULT_THRESHOLDS } from '../utils/thresholdSettings';
 import { soundManager } from '../utils/soundEffects';
+import { wsClient } from '../services/websocket';
 
 export default function ThresholdSettingsModal({ 
   isOpen, 
@@ -12,6 +13,13 @@ export default function ThresholdSettingsModal({
   if (!isOpen) return null;
 
   const [form, setForm] = useState({ ...currentThresholds });
+  const [wsUrl, setWsUrl] = useState(() => {
+    try {
+      return localStorage.getItem('urrt_ws_url') || wsClient.url || '';
+    } catch (e) {
+      return '';
+    }
+  });
 
   const handleChange = (key, val) => {
     setForm(prev => ({
@@ -28,6 +36,9 @@ export default function ThresholdSettingsModal({
   const handleApply = (e) => {
     e.preventDefault();
     soundManager.playChirp();
+    if (wsUrl.trim() && wsUrl.trim() !== wsClient.url) {
+      wsClient.updateUrl(wsUrl.trim());
+    }
     onSave(form);
     onClose();
   };
@@ -144,6 +155,27 @@ export default function ThresholdSettingsModal({
               value={form.humidityDanger}
               onChange={e => handleChange('humidityDanger', e.target.value)}
               className="w-full accent-blue-500 cursor-pointer"
+            />
+          </div>
+
+          {/* Telemetry Server URL (WebSocket) */}
+          <div className="p-3.5 rounded-xl bg-[#0f1624] border border-[#162338] space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-1.5 font-bold text-[#00c2cb]">
+                <Wifi className="w-3.5 h-3.5 text-[#00c2cb]" />
+                TELEMETRY SERVER URL (WS)
+              </span>
+              <span className="text-[10px] text-slate-500 font-mono">PORT 3001</span>
+            </div>
+            <p className="text-[10px] text-slate-400">
+              Local: <span className="text-[#00c2cb]">ws://localhost:3001</span> or <span className="text-[#00c2cb]">ws://&lt;PC_LAN_IP&gt;:3001</span>
+            </p>
+            <input 
+              type="text"
+              value={wsUrl}
+              onChange={e => setWsUrl(e.target.value)}
+              placeholder="ws://localhost:3001"
+              className="w-full px-3 py-1.5 rounded-lg bg-[#06090e] border border-[#162338] text-white focus:outline-none focus:border-[#00c2cb] font-mono text-xs"
             />
           </div>
 

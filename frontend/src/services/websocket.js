@@ -23,13 +23,22 @@ class WebSocketClient {
     if (customUrl) {
       this.url = customUrl;
     } else if (!this.url) {
-      // Default to env or window origin
-      const envUrl = import.meta.env.VITE_WS_URL;
-      if (envUrl) {
-        this.url = envUrl;
+      // Check localStorage first
+      let savedUrl = null;
+      try {
+        savedUrl = localStorage.getItem('urrt_ws_url');
+      } catch (e) {}
+
+      if (savedUrl) {
+        this.url = savedUrl;
       } else {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        this.url = `${protocol}//${window.location.hostname}:3001`;
+        const envUrl = import.meta.env.VITE_WS_URL;
+        if (envUrl) {
+          this.url = envUrl;
+        } else {
+          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          this.url = `${protocol}//${window.location.hostname}:3001`;
+        }
       }
     }
 
@@ -164,9 +173,36 @@ class WebSocketClient {
     if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
     if (this.ws) {
       this.ws.close();
+    }
+    this.ws = null;
+    this._setStatus('disconnected');
+  }
+
+  updateUrl(newUrl) {
+    if (!newUrl) return;
+    try {
+      localStorage.setItem('urrt_ws_url', newUrl);
+    } catch (e) {}
+    this.url = newUrl;
+    this.forcedClose = false;
+    this.reconnectAttempts = 0;
+    if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
+    if (this.ws) {
+      try {
+        this.ws.close();
+      } catch (e) {}
       this.ws = null;
     }
-    this._setStatus('disconnected');
+    this.connect(newUrl);
+  }
+
+  resetUrl() {
+    try {
+      localStorage.removeItem('urrt_ws_url');
+    } catch (e) {}
+    this.url = null;
+    this.disconnect();
+    this.connect();
   }
 }
 
