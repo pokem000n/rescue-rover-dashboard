@@ -112,11 +112,9 @@ export default function Dashboard({ onNavigateToCamera }) {
     setTheme(t => t === 'dark' ? 'light' : 'dark');
   };
 
-  // Demo Simulation Mode state
-  const [isDemoMode, setIsDemoMode] = useState(() => {
-    return import.meta.env.VITE_DEMO_MODE === 'true';
-  });
-  const [isSimulatedOnline, setIsSimulatedOnline] = useState(true);
+  // Demo Simulation Mode state - strictly false by default on page load / refresh
+  const [isDemoMode, setIsDemoMode] = useState(false);
+  const [isSimulatedOnline, setIsSimulatedOnline] = useState(false);
 
   const lastAlarmTimeRef = useRef(0);
 
@@ -407,7 +405,15 @@ export default function Dashboard({ onNavigateToCamera }) {
 
   const handleToggleDemoMode = () => {
     soundManager.playChirp();
-    setIsDemoMode(prev => !prev);
+    setIsDemoMode(prev => {
+      const next = !prev;
+      if (!next) {
+        setTemperature(null);
+        setHumidity(null);
+        setEsp32Online(false);
+      }
+      return next;
+    });
   };
 
   const handleToggleSimulatedRover = () => {

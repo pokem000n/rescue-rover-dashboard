@@ -35,3 +35,6 @@ Thumbs.db
 *.hex
 *.bin
 *.elf
+
+# Temp files
+.edge-temp/

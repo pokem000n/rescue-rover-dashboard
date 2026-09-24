@@ -296,7 +296,7 @@ export default function Header({
               title="Toggle Demo Simulator (D)"
             >
               <Sparkles className="w-3 h-3 text-amber-400" />
-              <span>{isDemoMode ? 'DEMO' : 'DEMO'}</span>
+              <span>{isDemoMode ? 'DEMO: ON' : 'DEMO: OFF'}</span>
             </button>
 
             {isDemoMode && (

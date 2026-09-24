@@ -1,25 +1,20 @@
-/*
+/**
  * ============================================================================
- * UIU RESCUE ROVER - ESP32 & DHT11 TELEMETRY FIRMWARE
- * RoboCup Junior Rescue Rover Project
+ * UIU RESCUE ROVER - ESP32 TELEMETRY TRANSMITTER (DHT11 & WEBSOCKET)
  * ============================================================================
  * 
- * Hardware:
- *   - ESP32 NodeMCU / ESP-WROOM-32 DevKit
- *   - DHT11 Temperature & Humidity Sensor
+ * Target Board: ESP32 Dev Module (DOIT ESP32 DEVKIT V1 / NodeMCU-32S)
  * 
- * Circuit Wiring:
+ * Hardware Wiring:
  *   DHT11 VCC   --> ESP32 3.3V (or 5V for 3-pin modules with built-in pullup)
  *   DHT11 GND   --> ESP32 GND
- *   DHT11 DATA  --> ESP32 GPIO 4 (Safe GPIO, no bootstrap conflicts)
- *   (If using bare 4-pin DHT11, place a 10k resistor between VCC and DATA)
+ *   DHT11 DATA  --> ESP32 GPIO 13 (or GPIO 4)
  * 
- * Required Arduino IDE Libraries:
- *   1. "DHT sensor library" by Adafruit (v1.4.x)
+ * Required Libraries in Arduino IDE (Tools -> Manage Libraries):
+ *   1. "DHT sensor library" by Adafruit
  *   2. "Adafruit Unified Sensor" by Adafruit
- *   3. "WebSockets" by Markus Sattler (v2.4.x)
- *   4. "ArduinoJson" by Benoit Blanchon (v6.x or v7.x)
- * 
+ *   3. "WebSockets" by Markus Sattler
+ *   4. "ArduinoJson" by Benoit Blanchon (v6 or v7)
  * ============================================================================
  */
 
@@ -29,31 +24,31 @@
 #include <ArduinoJson.h>
 
 // ============================================================================
-// CONFIGURATION CONSTANTS (MODIFY FOR YOUR NETWORK)
+// NETWORK & SERVER CONFIGURATION
 // ============================================================================
 
-// 1. Wi-Fi Credentials
-const char* WIFI_SSID     = "YOUR_WIFI_SSID";         // Replace with your Wi-Fi SSID
-const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";     // Replace with your Wi-Fi Password
+// 1. Enter your Mobile Hotspot / Wi-Fi Credentials:
+// (Note: Make sure your Hotspot 2.4 GHz band is enabled, as ESP32 requires 2.4 GHz)
+const char* WIFI_SSID     = "Galaxy A15 5G 882B";      // Your Wi-Fi / Hotspot SSID
+const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";     // Enter your Hotspot Password here
 
-// 2. WebSocket Server Connection Details (Your Computer's LAN IP)
-// DO NOT use "localhost" or "127.0.0.1" - use your computer's local IP address (e.g., 192.168.1.105)
-const char* WS_SERVER_HOST = "192.168.1.100";         // Computer LAN IP running backend
-const uint16_t WS_SERVER_PORT = 3001;                 // Backend port (default: 3001)
-const char* WS_SERVER_PATH = "/ws";                   // WebSocket endpoint path
+// 2. Computer LAN IP Address (running the backend server):
+const char* WS_SERVER_HOST = "10.114.198.130";        // Current Laptop IPv4
+const uint16_t WS_SERVER_PORT = 3001;                 // Backend Server Port
+const char* WS_SERVER_PATH = "/";                     // WebSocket Root Endpoint
 
-// 3. Sensor Pin & Type Configuration
-const uint8_t DHT_PIN = 4;                            // Safe ESP32 GPIO pin for DHT11
-#define DHT_TYPE DHT11                                // DHT11 sensor model
+// 3. Sensor Pin Configuration:
+#define DHTPIN 13                                     // Sensor DATA pin (GPIO 13)
+#define DHTTYPE DHT11                                 // Sensor model DHT11
 
-// 4. Telemetry Interval (milliseconds)
-const unsigned long TELEMETRY_INTERVAL_MS = 1500;     // 1.5 seconds between readings
+// 4. Telemetry Broadcast Interval (milliseconds)
+const unsigned long TELEMETRY_INTERVAL_MS = 1500;     // Sends sensor data every 1.5s
 
 // ============================================================================
 // GLOBAL OBJECTS & STATE
 // ============================================================================
 
-DHT dht(DHT_PIN, DHT_TYPE);
+DHT dht(DHTPIN, DHTTYPE);
 WebSocketsClient webSocket;
 
 unsigned long lastTelemetryTime = 0;
@@ -69,14 +64,14 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
   switch (type) {
     case WStype_DISCONNECTED:
       isWsConnected = false;
-      Serial.println("[WS] Disconnected from server!");
+      Serial.println("[WS] Disconnected from server. Reconnecting in 3s...");
       break;
 
     case WStype_CONNECTED: {
       isWsConnected = true;
-      Serial.printf("[WS] Connected to ws://%s:%d%s\n", WS_SERVER_HOST, WS_SERVER_PORT, WS_SERVER_PATH);
+      Serial.printf("[WS] CONNECTED to server ws://%s:%d%s\n", WS_SERVER_HOST, WS_SERVER_PORT, WS_SERVER_PATH);
 
-      // Send initial registration packet to backend
+      // Register device identity with backend
       StaticJsonDocument<256> doc;
       doc["type"] = "register";
       doc["role"] = "esp32";
@@ -87,20 +82,19 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
       String jsonString;
       serializeJson(doc, jsonString);
       webSocket.sendTXT(jsonString);
-      Serial.println("[WS] Registration packet transmitted.");
+      Serial.println("[WS] Registered as ESP32 hardware client.");
       break;
     }
 
     case WStype_TEXT:
-      Serial.printf("[WS] Message from server: %s\n", payload);
+      Serial.printf("[WS] Server message: %s\n", payload);
       break;
 
     case WStype_BIN:
-      Serial.printf("[WS] Binary data received (len: %u)\n", length);
       break;
 
     case WStype_ERROR:
-      Serial.println("[WS] Communication error occurred!");
+      Serial.println("[WS] Communication error!");
       break;
 
     case WStype_PING:
@@ -112,18 +106,21 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
 }
 
 // ============================================================================
-// WI-FI CONNECTION & RECONNECT LOGIC
+// WI-FI CONNECTION LOGIC
 // ============================================================================
 
 void connectWiFi() {
   if (WiFi.status() == WL_CONNECTED) return;
 
-  Serial.printf("\n[WiFi] Connecting to %s", WIFI_SSID);
+  Serial.println("\n--------------------------------------------------");
+  Serial.printf("[WiFi] Connecting to: %s\n", WIFI_SSID);
+  Serial.println("--------------------------------------------------");
+
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
   int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+  while (WiFi.status() != WL_CONNECTED && attempts < 25) {
     delay(500);
     Serial.print(".");
     attempts++;
@@ -133,11 +130,9 @@ void connectWiFi() {
     Serial.println("\n[WiFi] Connected successfully!");
     Serial.print("[WiFi] ESP32 IP Address: ");
     Serial.println(WiFi.localIP());
-    Serial.print("[WiFi] RSSI Signal Strength: ");
-    Serial.print(WiFi.RSSI());
-    Serial.println(" dBm");
+    Serial.printf("[WiFi] Signal Strength: %d dBm\n", WiFi.RSSI());
   } else {
-    Serial.println("\n[WiFi] Connection timeout. Will retry automatically in background...");
+    Serial.println("\n[WiFi] Connection timeout. Retrying in background...");
   }
 }
 
@@ -164,22 +159,20 @@ void readAndSendTelemetry() {
   }
   lastTelemetryTime = now;
 
-  // Read temperature as Celsius
-  float temperature = dht.readTemperature();
-  // Read relative humidity (%)
   float humidity = dht.readHumidity();
+  float temperature = dht.readTemperature();
 
-  // Validate sensor readings
-  if (isnan(temperature) || isnan(humidity)) {
-    Serial.println("[DHT11] ERROR: Failed to read from sensor! Check wiring & 3.3V power.");
+  // Check if DHT read failed
+  if (isnan(humidity) || isnan(temperature)) {
+    Serial.println("[DHT11] ERROR: Failed to read from sensor! Check pin wiring & 3.3V.");
     return;
   }
 
-  // Print to Serial Monitor
-  Serial.printf("[DHT11] Temperature: %.1f °C | Humidity: %.1f %% | Uptime: %lu s\n", 
+  // Serial Monitor Output
+  Serial.printf("[DHT11] Temp: %.1f °C | Humidity: %.1f %% | Uptime: %lu s\n", 
                 temperature, humidity, (now / 1000));
 
-  // If WebSocket is connected, serialize and send JSON
+  // If WebSocket is connected, send real JSON telemetry
   if (isWsConnected) {
     StaticJsonDocument<256> doc;
     doc["type"] = "sensor_data";
@@ -193,19 +186,19 @@ void readAndSendTelemetry() {
     String payload;
     serializeJson(doc, payload);
 
-    bool success = webSocket.sendTXT(payload);
-    if (success) {
-      Serial.println("[WS] Telemetry payload dispatched.");
+    bool ok = webSocket.sendTXT(payload);
+    if (ok) {
+      Serial.println("[WS] Telemetry payload dispatched -> Dashboard receiving!");
     } else {
-      Serial.println("[WS] Failed to dispatch packet.");
+      Serial.println("[WS] Dispatch failed.");
     }
   } else {
-    Serial.println("[WS] Notice: WebSocket disconnected. Waiting for connection...");
+    Serial.println("[WS] Server offline or disconnected. Waiting for link...");
   }
 }
 
 // ============================================================================
-// ARDUINO SETUP & MAIN LOOP
+// ARDUINO SETUP & LOOP
 // ============================================================================
 
 void setup() {
@@ -215,32 +208,26 @@ void setup() {
   Serial.println("\n==================================================");
   Serial.println("   UIU RESCUE ROVER - DHT11 TELEMETRY NODE        ");
   Serial.println("==================================================");
-  Serial.printf("Configured DHT11 GPIO Pin: %d\n", DHT_PIN);
-  Serial.printf("Configured Backend Server: ws://%s:%d%s\n", WS_SERVER_HOST, WS_SERVER_PORT, WS_SERVER_PATH);
+  Serial.printf("Configured DHT Pin: GPIO %d\n", DHTPIN);
+  Serial.printf("Target Server: ws://%s:%d%s\n", WS_SERVER_HOST, WS_SERVER_PORT, WS_SERVER_PATH);
   Serial.println("==================================================\n");
 
-  // Initialize DHT sensor
   dht.begin();
   Serial.println("[DHT11] Sensor initialized.");
 
-  // Connect to local Wi-Fi network
   connectWiFi();
 
   // Setup WebSocket Client
   webSocket.begin(WS_SERVER_HOST, WS_SERVER_PORT, WS_SERVER_PATH);
   webSocket.onEvent(webSocketEvent);
-  webSocket.setReconnectInterval(3000);  // Automatically attempt reconnect every 3s if server goes down
+  webSocket.setReconnectInterval(3000);
   webSocket.enableHeartbeat(15000, 3000, 2);
 }
 
 void loop() {
-  // Maintain background Wi-Fi connection
   checkWiFiReconnect();
-
-  // Process WebSocket client event loop
   webSocket.loop();
 
-  // Poll sensor and send telemetry if Wi-Fi is ready
   if (WiFi.status() == WL_CONNECTED) {
     readAndSendTelemetry();
   }
