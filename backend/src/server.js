@@ -11,12 +11,15 @@
 
 require('dotenv').config();
 const http = require('http');
+const os = require('os');
+const dgram = require('dgram');
 const express = require('express');
 const cors = require('cors');
 const { WebSocketServer, WebSocket } = require('ws');
 
 const PORT = parseInt(process.env.PORT, 10) || 3001;
 const HOST = process.env.HOST || '0.0.0.0';
+const UDP_DISCOVERY_PORT = parseInt(process.env.UDP_DISCOVERY_PORT, 10) || 3002;
 const HEARTBEAT_TIMEOUT = parseInt(process.env.ESP32_HEARTBEAT_TIMEOUT_MS, 10) || 5000;
 
 const app = express();
@@ -376,14 +379,91 @@ setInterval(() => {
   }
 }, 1000);
 
+// Dynamic LAN IP Detector (Prefers Wi-Fi / Active Wireless interface)
+function getActiveLocalIp() {
+  const interfaces = os.networkInterfaces();
+  // 1. Look for Wi-Fi or Wireless interface first
+  for (const name of Object.keys(interfaces)) {
+    if (/wi-?fi|wlan|wireless/i.test(name)) {
+      for (const iface of interfaces[name]) {
+        if (iface.family === 'IPv4' && !iface.internal) {
+          return iface.address;
+        }
+      }
+    }
+  }
+  // 2. Otherwise look for non-virtual Ethernet interfaces
+  for (const name of Object.keys(interfaces)) {
+    if (/virtual|vethernet|vbox|vmware/i.test(name)) continue;
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal && !iface.address.startsWith('192.168.56.')) {
+        return iface.address;
+      }
+    }
+  }
+  // 3. Fallback
+  return '127.0.0.1';
+}
+
+// Start UDP Auto-Discovery Beacon & Query Responder for ESP32
+function startUdpDiscovery() {
+  const udpServer = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+
+  udpServer.on('error', (err) => {
+    console.warn('[UDP-Discovery] Error:', err.message);
+  });
+
+  udpServer.on('message', (msg, rinfo) => {
+    try {
+      const activeIp = getActiveLocalIp();
+      const reply = Buffer.from(JSON.stringify({
+        type: 'URRT_OFFER',
+        host: activeIp,
+        port: PORT,
+        serverTime: Date.now()
+      }));
+      udpServer.send(reply, 0, reply.length, rinfo.port, rinfo.address);
+      console.log(`[UDP-Discovery] Answered discovery ping from ESP32 (${rinfo.address}) -> Sent host: ${activeIp}:${PORT}`);
+    } catch (e) {
+      console.warn('[UDP-Discovery] Failed to answer query:', e);
+    }
+  });
+
+  udpServer.bind(UDP_DISCOVERY_PORT, () => {
+    try {
+      udpServer.setBroadcast(true);
+      console.log(`[UDP-Discovery] Service beacon active on UDP port ${UDP_DISCOVERY_PORT}`);
+
+      // Broadcast periodic beacon every 2 seconds
+      setInterval(() => {
+        try {
+          const activeIp = getActiveLocalIp();
+          const beacon = Buffer.from(JSON.stringify({
+            type: 'URRT_BEACON',
+            host: activeIp,
+            port: PORT
+          }));
+          udpServer.send(beacon, 0, beacon.length, UDP_DISCOVERY_PORT, '255.255.255.255');
+        } catch (e) {}
+      }, 2000);
+    } catch (err) {
+      console.warn('[UDP-Discovery] Broadcast setup error:', err.message);
+    }
+  });
+}
+
 // Start Server
 server.listen(PORT, HOST, () => {
+  const activeIp = getActiveLocalIp();
   console.log('====================================================');
   console.log('  UIU RESCUE ROVER - TELEMETRY & SIGNALING SERVER  ');
   console.log('====================================================');
   console.log(`HTTP Server running at http://${HOST}:${PORT}`);
-  console.log(`WebSocket Endpoint available at ws://${HOST}:${PORT}`);
+  console.log(`WebSocket Endpoint: ws://${HOST}:${PORT} (LAN: ws://${activeIp}:${PORT})`);
+  console.log(`UDP Auto-Discovery: Port ${UDP_DISCOVERY_PORT} (Beaconing to ESP32)`);
   console.log(`Health Check: http://localhost:${PORT}/api/health`);
   console.log(`System Status: http://localhost:${PORT}/api/status`);
   console.log('====================================================\n');
+
+  startUdpDiscovery();
 });
