@@ -316,7 +316,7 @@ export default function CameraFeed({
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     // Mobile phones cannot open laptop's "localhost", and camera permissions require HTTPS.
     // Use the live Vercel HTTPS domain when on localhost so smartphones can scan and stream effortlessly.
-    const baseUrl = isLocalhost ? 'https://frontend-alif-af28.vercel.app' : window.location.origin;
+    const baseUrl = isLocalhost ? 'https://urrt-alif-af28.vercel.app' : window.location.origin;
     return `${baseUrl}/camera?room=${roomCode}-${slot.subId}&cam=${slotId === 'cam2' ? '2' : slotId === 'cam3' ? '3' : '1'}&name=${encodeURIComponent(slot.role)}`;
   };
 
