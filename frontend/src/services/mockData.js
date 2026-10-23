@@ -1,4 +1,4 @@
-/**
+﻿/**
  * UIU Rescue Rover - Mock Telemetry Simulator for Demo Mode
  * 
  * Generates realistic physics-based random-walk telemetry for:
@@ -16,6 +16,17 @@ class MockDataSimulator {
     this.temperature = 26.5;
     this.humidity = 58.0;
     this.uptimeSeconds = 0;
+    this.battery = 100;
+    this.sonar = 200;
+    this.colorShapes = [
+      { color: 'Red', shape: 'Circle' },
+      { color: 'Blue', shape: 'Square' },
+      { color: 'Green', shape: 'Triangle' },
+      { color: 'Yellow', shape: 'Rectangle' },
+      { color: 'Orange', shape: 'Star' },
+    ];
+    this.colorShapeIndex = 0;
+    this.colorShapeTimer = 0;
     this.isRoverSimulatedOnline = true;
   }
 
@@ -55,13 +66,31 @@ class MockDataSimulator {
       const humDelta = -(tempDelta * 0.8) + (Math.random() - 0.5) * 0.6;
       this.humidity = Math.max(40.0, Math.min(80.0, this.humidity + humDelta));
 
+      // Battery drains slowly
+      this.battery = Math.max(0, this.battery - 0.05);
+
+      // Sonar wanders around 100mm ±50mm
+      this.sonar = Math.max(30, Math.min(300, this.sonar + (Math.random() - 0.5) * 20));
+
+      // Color/shape changes every ~20 ticks (30 seconds)
+      this.colorShapeTimer++;
+      if (this.colorShapeTimer >= 20) {
+        this.colorShapeTimer = 0;
+        this.colorShapeIndex = (this.colorShapeIndex + 1) % this.colorShapes.length;
+      }
+
       const payload = {
         type: 'sensor_update',
         temperature: Number(this.temperature.toFixed(1)),
         humidity: Number(this.humidity.toFixed(1)),
         timestamp: Date.now(),
         uptime_s: this.uptimeSeconds,
-        isDemo: true
+        isDemo: true,
+        battery: Number(this.battery.toFixed(1)),
+        sonar: Math.round(this.sonar),
+        color: this.colorShapes[this.colorShapeIndex].color,
+        shape: this.colorShapes[this.colorShapeIndex].shape,
+        motionTracking: Math.random() > 0.5
       };
 
       if (this.onDataCallback) {

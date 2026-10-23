@@ -1,4 +1,4 @@
-/**
+﻿/**
  * UIU Rescue Rover - Backend Server
  * Real-time Telemetry & WebRTC Signaling Server
  * 
@@ -40,6 +40,15 @@ const roverState = {
   stats: {
     totalPacketsReceived: 0,
     invalidPackets: 0
+  },
+  mode: 'teleop',
+  battery: null,
+  sensors: {
+    sonar: null,
+    color: null,
+    shape: null,
+    motionTracking: false,
+    qrIp: null
   }
 };
 
@@ -80,6 +89,67 @@ app.get('/api/telemetry', (req, res) => {
     esp32Online: roverState.online,
     lastSeen: roverState.lastSeen,
     telemetry: roverState.latestData
+  });
+});
+
+app.get('/api/sensors', (req, res) => {
+  res.json({
+    sonar: roverState.sensors.sonar,
+    color: roverState.sensors.color,
+    shape: roverState.sensors.shape,
+    motionTracking: roverState.sensors.motionTracking,
+    qrIp: roverState.sensors.qrIp,
+    battery: roverState.battery,
+    timestamp: Date.now()
+  });
+});
+
+app.post('/api/mode', (req, res) => {
+  const { mode } = req.body;
+  if (!['teleop', 'autonomous'].includes(mode)) {
+    return res.status(400).json({ error: 'Invalid mode. Use teleop or autonomous.' });
+  }
+  roverState.mode = mode;
+  broadcastToDashboards({ type: 'mode_change', mode, timestamp: Date.now() });
+  // Forward to ESP32 if connected
+  if (esp32Socket && esp32Socket.readyState === WebSocket.OPEN) {
+    esp32Socket.send(JSON.stringify({ type: 'mode_change', mode }));
+  }
+  res.json({ success: true, mode });
+});
+
+app.post('/api/drive', (req, res) => {
+  if (roverState.mode === 'autonomous') {
+    return res.status(403).json({ error: 'Drive controls locked in autonomous mode.' });
+  }
+  const { direction, speed = 200 } = req.body;
+  const validDirections = ['forward', 'backward', 'left', 'right', 'stop'];
+  if (!validDirections.includes(direction)) {
+    return res.status(400).json({ error: 'Invalid direction.' });
+  }
+  const driveCmd = { type: 'drive_command', direction, speed, timestamp: Date.now() };
+  if (esp32Socket && esp32Socket.readyState === WebSocket.OPEN) {
+    esp32Socket.send(JSON.stringify(driveCmd));
+  }
+  broadcastToDashboards({ type: 'drive_command', direction, speed, timestamp: Date.now() });
+  res.json({ success: true, direction, speed });
+});
+
+app.post('/api/estop', (req, res) => {
+  roverState.mode = 'teleop';
+  const estopMsg = { type: 'estop', timestamp: Date.now() };
+  broadcastToDashboards(estopMsg);
+  if (esp32Socket && esp32Socket.readyState === WebSocket.OPEN) {
+    esp32Socket.send(JSON.stringify(estopMsg));
+  }
+  res.json({ success: true, message: 'E-Stop activated' });
+});
+
+app.get('/api/camera/stream', (req, res) => {
+  res.json({
+    active: cameraBroadcasters.size > 0,
+    viewerCount: dashboardClients.size,
+    wsUrl: `ws://${req.hostname}:${PORT}`
   });
 });
 
@@ -162,7 +232,10 @@ wss.on('connection', (ws, req) => {
     },
     cameraActive: cameraBroadcasters.size > 0,
     connectedDashboards: dashboardClients.size,
-    serverTime: Date.now()
+    serverTime: Date.now(),
+    mode: roverState.mode,
+    battery: roverState.battery,
+    sensors: roverState.sensors
   }));
 
   ws.on('message', (message) => {
@@ -240,6 +313,14 @@ wss.on('connection', (ws, req) => {
 
       console.log(`[Telemetry] Temp: ${temp.toFixed(1)}°C | Humidity: ${hum.toFixed(1)}% | Packets: ${roverState.stats.totalPacketsReceived}`);
 
+      // Extended sensor fields (sonar, color, shape, battery, motionTracking)
+      if (parsed.sonar !== undefined) roverState.sensors.sonar = parsed.sonar;
+      if (parsed.color !== undefined) roverState.sensors.color = parsed.color;
+      if (parsed.shape !== undefined) roverState.sensors.shape = parsed.shape;
+      if (parsed.battery !== undefined) roverState.battery = parsed.battery;
+      if (parsed.motionTracking !== undefined) roverState.sensors.motionTracking = parsed.motionTracking;
+      if (parsed.qrIp !== undefined) roverState.sensors.qrIp = parsed.qrIp;
+
       // Broadcast update to all dashboard instances
       broadcastToDashboards({
         type: 'sensor_update',
@@ -247,7 +328,14 @@ wss.on('connection', (ws, req) => {
         humidity: Number(hum.toFixed(1)),
         timestamp,
         uptime_s: uptime,
-        serverTime: Date.now()
+        serverTime: Date.now(),
+        mode: roverState.mode,
+        battery: roverState.battery,
+        sonar: roverState.sensors.sonar,
+        color: roverState.sensors.color,
+        shape: roverState.sensors.shape,
+        motionTracking: roverState.sensors.motionTracking,
+        qrIp: roverState.sensors.qrIp
       });
       return;
     }
@@ -304,6 +392,30 @@ wss.on('connection', (ws, req) => {
           candidate: parsed.candidate
         });
       }
+      return;
+    }
+
+    // Control commands from dashboard clients (mode_change, drive_command, estop)
+    if (parsed.type === 'mode_change') {
+      roverState.mode = parsed.mode || 'teleop';
+      if (esp32Socket && esp32Socket.readyState === WebSocket.OPEN) {
+        esp32Socket.send(JSON.stringify({ type: 'mode_change', mode: roverState.mode }));
+      }
+      broadcastToDashboards({ type: 'mode_change', mode: roverState.mode, timestamp: Date.now() });
+      return;
+    }
+    if (parsed.type === 'drive_command' && roverState.mode !== 'autonomous') {
+      if (esp32Socket && esp32Socket.readyState === WebSocket.OPEN) {
+        esp32Socket.send(JSON.stringify(parsed));
+      }
+      return;
+    }
+    if (parsed.type === 'estop') {
+      roverState.mode = 'teleop';
+      if (esp32Socket && esp32Socket.readyState === WebSocket.OPEN) {
+        esp32Socket.send(JSON.stringify({ type: 'estop' }));
+      }
+      broadcastToDashboards({ type: 'estop', timestamp: Date.now() });
       return;
     }
 

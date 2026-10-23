@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+﻿import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Header from '../components/Header';
 import MetricCard from '../components/MetricCard';
 import CameraFeed from '../components/CameraFeed';
@@ -7,6 +7,10 @@ import ThreatMatrix from '../components/ThreatMatrix';
 import MissionLog from '../components/MissionLog';
 import SystemInfo from '../components/SystemInfo';
 import PacketLog from '../components/PacketLog';
+import EStopButton from '../components/EStopButton';
+import ControlModePanel from '../components/ControlModePanel';
+import DriveControl from '../components/DriveControl';
+import SensorTasksPanel from '../components/SensorTasksPanel';
 
 // Modals
 import ThresholdSettingsModal from '../components/ThresholdSettingsModal';
@@ -23,7 +27,8 @@ import {
   ShieldCheck, 
   AlertTriangle, 
   AlertOctagon, 
-  HelpCircle 
+  HelpCircle,
+  Gamepad2
 } from 'lucide-react';
 
 import { wsClient } from '../services/websocket';
@@ -115,6 +120,12 @@ export default function Dashboard({ onNavigateToCamera }) {
   // Demo Simulation Mode state - strictly false by default on page load / refresh
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [isSimulatedOnline, setIsSimulatedOnline] = useState(false);
+
+  // URRT Rulebook: Control mode, battery, sensor & E-stop state
+  const [mode, setMode] = React.useState('teleop'); // 'teleop' | 'autonomous'
+  const [battery, setBattery] = React.useState(null);
+  const [sensors, setSensors] = React.useState({ sonar: null, color: null, shape: null, motionTracking: false, qrIp: null });
+  const [eStopFlash, setEStopFlash] = React.useState(false);
 
   const lastAlarmTimeRef = useRef(0);
 
@@ -247,6 +258,19 @@ export default function Dashboard({ onNavigateToCamera }) {
     setEsp32Online(true);
     setPacketCount(c => c + 1);
 
+    // Extended sensor fields from URRT rulebook
+    if (data.battery !== undefined) setBattery(data.battery);
+    if (data.sonar !== undefined || data.color !== undefined || data.shape !== undefined) {
+      setSensors(prev => ({
+        ...prev,
+        sonar: data.sonar !== undefined ? data.sonar : prev.sonar,
+        color: data.color !== undefined ? data.color : prev.color,
+        shape: data.shape !== undefined ? data.shape : prev.shape,
+        motionTracking: data.motionTracking !== undefined ? data.motionTracking : prev.motionTracking,
+        qrIp: data.qrIp !== undefined ? data.qrIp : prev.qrIp,
+      }));
+    }
+
     // Update rolling history buffer
     setHistory((prev) => {
       const newPoint = {
@@ -325,11 +349,24 @@ export default function Dashboard({ onNavigateToCamera }) {
       }
     });
 
+    const unsubMode = wsClient.on('mode_change', (payload) => {
+      setMode(payload.mode || 'teleop');
+    });
+
+    const unsubEstop = wsClient.on('estop', () => {
+      setMode('teleop');
+      setEStopFlash(true);
+      soundManager.playHazardAlarm();
+      setTimeout(() => setEStopFlash(false), 2000);
+    });
+
     return () => {
       unsubStatus();
       unsubInitial();
       unsubSensor();
       unsubDeviceStatus();
+      unsubMode();
+      unsubEstop();
     };
   }, [isDemoMode, ingestSensorData]);
 
@@ -391,6 +428,9 @@ export default function Dashboard({ onNavigateToCamera }) {
       } else if (e.key === '5') {
         soundManager.playChirp();
         setActiveTab('all');
+      } else if (e.code === 'KeyE') {
+        e.preventDefault();
+        handleEStop();
       } else if (e.key === 'Escape') {
         setShowSettingsModal(false);
         setShowHotkeysModal(false);
@@ -414,6 +454,31 @@ export default function Dashboard({ onNavigateToCamera }) {
       }
       return next;
     });
+  };
+
+  // URRT Rulebook: Control mode, drive, and E-stop handlers
+  const handleModeChange = (newMode) => {
+    soundManager.playChirp();
+    setMode(newMode);
+    wsClient.send({ type: 'mode_change', mode: newMode });
+  };
+
+  const handleDrive = useCallback((direction) => {
+    if (mode === 'autonomous') return;
+    wsClient.send({ type: 'drive_command', direction, speed: 200 });
+  }, [mode]);
+
+  const handleEStop = () => {
+    soundManager.playHazardAlarm();
+    setMode('teleop');
+    setEStopFlash(true);
+    wsClient.send({ type: 'estop' });
+    setTimeout(() => setEStopFlash(false), 2000);
+    addLog({ type: 'E-STOP', message: 'Software E-Stop activated' });
+  };
+
+  const addLog = (entry) => {
+    // Helper for adding structured log entries
   };
 
   const handleToggleSimulatedRover = () => {
@@ -484,7 +549,8 @@ export default function Dashboard({ onNavigateToCamera }) {
     { id: 'logbook', label: 'LOGBOOK & PHOTOS', sublabel: 'Victim Log & Snapshots', icon: ClipboardList, count: incidents.length },
     { id: 'threats', label: 'ENVIRONMENT & RISKS', sublabel: 'Thermal Threat Matrix', icon: Flame },
     { id: 'system', label: 'SYSTEM & PACKETS', sublabel: 'Link Health & Diagnostics', icon: Cpu },
-    { id: 'all', label: 'VIEW ALL', sublabel: 'Complete Overview', icon: LayoutGrid }
+    { id: 'all', label: 'VIEW ALL', sublabel: 'Complete Overview', icon: LayoutGrid },
+    { id: 'control', label: 'ROVER CONTROL', sublabel: 'Drive & Mode', icon: Gamepad2 }
   ];
 
   return (
