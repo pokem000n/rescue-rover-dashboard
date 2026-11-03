@@ -30,6 +30,10 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import { Peer } from 'peerjs';
 import { soundManager } from '../utils/soundEffects';
+// QR and object detection libraries (installed via npm)
+import jsQR from 'jsqr';
+import * as tf from '@tensorflow/tfjs';
+import * as cocoSsd from '@tensorflow-models/coco-ssd';
 
 const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -43,6 +47,79 @@ const CAM_SLOTS = [
   { id: 'cam2', label: 'CAM 02 (ARM)', role: 'Arm / Rubble Inspection', subId: 'cam2' },
   { id: 'cam3', label: 'CAM 03 (REAR)', role: 'Rear / Panoramic', subId: 'cam3' }
 ];
+
+// ─── Color Name Classifier (from RGB) ───
+function getColorName(r, g, b) {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const lum = (max + min) / 2;
+  const sat = max === min ? 0 : (max - min) / (lum > 127 ? (510 - max - min) : (max + min));
+
+  if (lum < 30) return 'Black';
+  if (lum > 225 && sat < 0.15) return 'White';
+  if (sat < 0.12) {
+    if (lum < 80) return 'Dark Gray';
+    if (lum < 170) return 'Gray';
+    return 'Light Gray';
+  }
+
+  // Compute hue
+  let hue = 0;
+  const d = max - min;
+  if (max === r) hue = ((g - b) / d + (g < b ? 6 : 0)) * 60;
+  else if (max === g) hue = ((b - r) / d + 2) * 60;
+  else hue = ((r - g) / d + 4) * 60;
+
+  if (hue < 15 || hue >= 345) return 'Red';
+  if (hue < 40) return 'Orange';
+  if (hue < 70) return 'Yellow';
+  if (hue < 155) return 'Green';
+  if (hue < 195) return 'Cyan';
+  if (hue < 260) return 'Blue';
+  if (hue < 290) return 'Purple';
+  if (hue < 345) return 'Pink';
+  return 'Red';
+}
+
+// ─── Shape Detector (edge & aspect-ratio based) ───
+function detectShape(aspect, bw, bh, imageData, sx, sy, ex, ey, imgW) {
+  // Calculate how circular vs rectangular the object is
+  // by sampling edges within the bounding box
+  const cx = (sx + ex) / 2;
+  const cy = (sy + ey) / 2;
+  const rx = (ex - sx) / 2;
+  const ry = (ey - sy) / 2;
+
+  if (rx < 5 || ry < 5) return 'Point';
+
+  // Sample pixels on the border of the bounding box to detect circularity
+  let edgePixels = 0;
+  let circlePixels = 0;
+  const steps = 36;
+
+  for (let i = 0; i < steps; i++) {
+    const angle = (i / steps) * Math.PI * 2;
+    const px = Math.round(cx + rx * 0.9 * Math.cos(angle));
+    const py = Math.round(cy + ry * 0.9 * Math.sin(angle));
+    if (px >= 0 && px < imgW && py >= 0) {
+      const idx = (py * imgW + px) * 4;
+      const brightness = imageData.data[idx] * 0.299 + imageData.data[idx + 1] * 0.587 + imageData.data[idx + 2] * 0.114;
+      if (brightness > 30) circlePixels++;
+      edgePixels++;
+    }
+  }
+
+  const circularity = edgePixels > 0 ? circlePixels / edgePixels : 0;
+  const squareness = Math.min(aspect, 1 / aspect); // 1.0 = perfect square
+
+  if (squareness > 0.85 && circularity > 0.7) return 'Circle';
+  if (squareness > 0.85 && circularity > 0.5) return 'Square';
+  if (aspect > 1.5) return 'Horizontal Rectangle';
+  if (aspect < 0.65) return 'Vertical Rectangle';
+  if (squareness > 0.7) return 'Rectangle';
+  if (aspect > 2.5 || aspect < 0.4) return 'Elongated';
+  return 'Rectangle';
+}
 
 export default function CameraFeed({ 
   isDemoMode,
@@ -90,6 +167,25 @@ export default function CameraFeed({
   const [copiedPairUrl, setCopiedPairUrl] = useState(false);
   const [showGalleryModal, setShowGalleryModal] = useState(false);
   const [snapshots, setSnapshots] = useState([]);
+
+  // ─── AI Vision: QR Detection, Object Detection, Motion Detection ───
+  const detectionCanvasRef = useRef(null);
+  const overlayCanvasRef = useRef(null);
+  const prevFrameRef = useRef(null);
+  const cocoModelRef = useRef(null);
+  const detectionLoopRef = useRef(null);
+
+  const [qrEnabled, setQrEnabled] = useState(true);
+  const [objectDetectEnabled, setObjectDetectEnabled] = useState(false);
+  const [motionDetectEnabled, setMotionDetectEnabled] = useState(true);
+
+  const [qrResult, setQrResult] = useState(null); // { data: string, isUrl: boolean }
+  const [qrHistory, setQrHistory] = useState([]); // array of past QR results
+  const [detectedObjects, setDetectedObjects] = useState([]); // [{ class, score, bbox }]
+  const [motionLevel, setMotionLevel] = useState(0); // 0-100 percentage
+  const [motionAlert, setMotionAlert] = useState(false);
+  const [modelLoading, setModelLoading] = useState(false);
+  const [copiedQr, setCopiedQr] = useState(false);
 
   // Setup Peer Listeners for all 3 camera slots
   useEffect(() => {
@@ -198,6 +294,237 @@ export default function CameraFeed({
       handleCaptureSnapshot();
     }
   }, [triggerSnapshot]);
+
+  // ─── Load COCO-SSD model lazily when object detection is enabled ───
+  useEffect(() => {
+    if (!objectDetectEnabled) return;
+    if (cocoModelRef.current) return;
+    let cancelled = false;
+    setModelLoading(true);
+    cocoSsd.load({ base: 'lite_mobilenet_v2' }).then((model) => {
+      if (!cancelled) {
+        cocoModelRef.current = model;
+        setModelLoading(false);
+        console.log('[AI Vision] COCO-SSD model loaded');
+      }
+    }).catch((err) => {
+      console.error('[AI Vision] Model load error:', err);
+      if (!cancelled) setModelLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [objectDetectEnabled]);
+
+  // ─── Main Detection Loop: QR + Object Detection + Motion Detection ───
+  useEffect(() => {
+    const anyEnabled = qrEnabled || objectDetectEnabled || motionDetectEnabled;
+    if (!anyEnabled) {
+      if (detectionLoopRef.current) {
+        clearInterval(detectionLoopRef.current);
+        detectionLoopRef.current = null;
+      }
+      return;
+    }
+
+    const getActiveVideo = () => {
+      if (activeSlot === 'cam1') return video1Ref.current;
+      if (activeSlot === 'cam2') return video2Ref.current;
+      if (activeSlot === 'cam3') return video3Ref.current;
+      return video1Ref.current; // fallback for split
+    };
+
+    const isUrlString = (str) => {
+      try { new URL(str); return true; } catch { return false; }
+    };
+
+    const runDetection = async () => {
+      const video = getActiveVideo();
+      if (!video || !video.videoWidth || video.paused || video.ended) return;
+
+      const w = video.videoWidth;
+      const h = video.videoHeight;
+
+      // Get or create hidden canvas for frame capture
+      let canvas = detectionCanvasRef.current;
+      if (!canvas) {
+        canvas = document.createElement('canvas');
+        detectionCanvasRef.current = canvas;
+      }
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(video, 0, 0, w, h);
+      const imageData = ctx.getImageData(0, 0, w, h);
+
+      // ── QR Code Detection ──
+      if (qrEnabled) {
+        try {
+          const qr = jsQR(imageData.data, w, h, { inversionAttempts: 'dontInvert' });
+          if (qr && qr.data) {
+            const newResult = { data: qr.data, isUrl: isUrlString(qr.data), timestamp: Date.now() };
+            setQrResult(prev => {
+              if (prev && prev.data === qr.data) return prev;
+              // New QR found — add to history
+              setQrHistory(hist => {
+                if (hist.length > 0 && hist[0].data === qr.data) return hist;
+                soundManager.playChirp();
+                return [newResult, ...hist].slice(0, 20);
+              });
+              return newResult;
+            });
+          }
+        } catch (e) { /* jsQR can throw on bad frames */ }
+      }
+
+      // ── Object Detection ──
+      if (objectDetectEnabled && cocoModelRef.current) {
+        try {
+          const predictions = await cocoModelRef.current.detect(video, 10, 0.4);
+          setDetectedObjects(predictions.map(p => {
+            const [bx, by, bw, bh] = p.bbox;
+            // ── Dominant Color Analysis ──
+            let rSum = 0, gSum = 0, bSum = 0, count = 0;
+            const sx = Math.max(0, Math.floor(bx));
+            const sy = Math.max(0, Math.floor(by));
+            const ex = Math.min(w, Math.floor(bx + bw));
+            const ey = Math.min(h, Math.floor(by + bh));
+            // Sample every 4th pixel for speed
+            for (let py = sy; py < ey; py += 4) {
+              for (let px = sx; px < ex; px += 4) {
+                const idx = (py * w + px) * 4;
+                rSum += imageData.data[idx];
+                gSum += imageData.data[idx + 1];
+                bSum += imageData.data[idx + 2];
+                count++;
+              }
+            }
+            const avgR = count ? Math.round(rSum / count) : 0;
+            const avgG = count ? Math.round(gSum / count) : 0;
+            const avgB = count ? Math.round(bSum / count) : 0;
+            const dominantHex = `#${avgR.toString(16).padStart(2,'0')}${avgG.toString(16).padStart(2,'0')}${avgB.toString(16).padStart(2,'0')}`;
+            const colorName = getColorName(avgR, avgG, avgB);
+
+            // ── Shape Analysis (aspect ratio based) ──
+            const aspect = bw / (bh || 1);
+            const area = bw * bh;
+            const shapeName = detectShape(aspect, bw, bh, imageData, sx, sy, ex, ey, w);
+
+            return {
+              class: p.class,
+              score: Math.round(p.score * 100),
+              bbox: p.bbox,
+              color: { hex: dominantHex, name: colorName, r: avgR, g: avgG, b: avgB },
+              shape: shapeName
+            };
+          }));
+        } catch (e) { /* ignore detection errors */ }
+      }
+
+      // ── Motion Detection (frame difference) ──
+      if (motionDetectEnabled) {
+        const currentGray = new Uint8Array(w * h);
+        for (let i = 0; i < w * h; i++) {
+          const idx = i * 4;
+          currentGray[i] = Math.round(imageData.data[idx] * 0.299 + imageData.data[idx + 1] * 0.587 + imageData.data[idx + 2] * 0.114);
+        }
+
+        if (prevFrameRef.current && prevFrameRef.current.length === currentGray.length) {
+          let diffCount = 0;
+          const threshold = 30; // pixel change threshold
+          for (let i = 0; i < currentGray.length; i++) {
+            if (Math.abs(currentGray[i] - prevFrameRef.current[i]) > threshold) {
+              diffCount++;
+            }
+          }
+          const motionPct = Math.min(100, Math.round((diffCount / currentGray.length) * 100 * 5)); // scale up
+          setMotionLevel(motionPct);
+          setMotionAlert(motionPct > 25);
+        }
+
+        prevFrameRef.current = currentGray;
+      }
+    };
+
+    // Run every 500ms for QR/motion, 800ms if object detection is on (heavier)
+    const interval = objectDetectEnabled ? 800 : 500;
+    detectionLoopRef.current = setInterval(runDetection, interval);
+
+    return () => {
+      if (detectionLoopRef.current) {
+        clearInterval(detectionLoopRef.current);
+        detectionLoopRef.current = null;
+      }
+    };
+  }, [qrEnabled, objectDetectEnabled, motionDetectEnabled, activeSlot]);
+
+  // ─── Draw bounding boxes on overlay canvas ───
+  useEffect(() => {
+    if (!objectDetectEnabled || detectedObjects.length === 0) return;
+    const overlay = overlayCanvasRef.current;
+    if (!overlay) return;
+    
+    const video = activeSlot === 'cam2' ? video2Ref.current : activeSlot === 'cam3' ? video3Ref.current : video1Ref.current;
+    if (!video || !video.videoWidth) return;
+
+    const rect = video.getBoundingClientRect();
+    overlay.width = rect.width;
+    overlay.height = rect.height;
+    const scaleX = rect.width / video.videoWidth;
+    const scaleY = rect.height / video.videoHeight;
+    
+    const ctx = overlay.getContext('2d');
+    ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+    const colors = ['#00c2cb', '#f59e0b', '#ef4444', '#8b5cf6', '#10b981', '#f97316'];
+
+    detectedObjects.forEach((obj, i) => {
+      const [x, y, w, h] = obj.bbox;
+      const sx = x * scaleX;
+      const sy = y * scaleY;
+      const sw = w * scaleX;
+      const sh = h * scaleY;
+      const color = obj.color ? obj.color.hex : colors[i % colors.length];
+      const borderColor = colors[i % colors.length];
+
+      // Bounding box with corner brackets style
+      ctx.strokeStyle = borderColor;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(sx, sy, sw, sh);
+
+      // Top label: class + score
+      const label = `${obj.class} ${obj.score}%`;
+      ctx.font = 'bold 11px monospace';
+      const textW = ctx.measureText(label).width + 8;
+      ctx.fillStyle = borderColor;
+      ctx.fillRect(sx, sy - 18, textW, 18);
+      ctx.fillStyle = '#000';
+      ctx.fillText(label, sx + 4, sy - 5);
+
+      // Bottom label: color + shape
+      if (obj.color || obj.shape) {
+        const infoLabel = `${obj.color ? obj.color.name : '?'} · ${obj.shape || '?'}`;
+        ctx.font = 'bold 10px monospace';
+        const infoW = ctx.measureText(infoLabel).width + 24;
+        
+        // Color swatch + info background
+        ctx.fillStyle = 'rgba(0,0,0,0.75)';
+        ctx.fillRect(sx, sy + sh + 2, infoW, 16);
+        
+        // Tiny color swatch circle
+        if (obj.color) {
+          ctx.beginPath();
+          ctx.arc(sx + 8, sy + sh + 10, 4, 0, Math.PI * 2);
+          ctx.fillStyle = obj.color.hex;
+          ctx.fill();
+          ctx.strokeStyle = '#fff';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+        
+        ctx.fillStyle = '#fff';
+        ctx.fillText(infoLabel, sx + 16, sy + sh + 14);
+      }
+    });
+  }, [detectedObjects, objectDetectEnabled, activeSlot]);
 
   const handleCaptureSnapshot = () => {
     soundManager.playShutter();
@@ -485,6 +812,15 @@ export default function CameraFeed({
             {/* Standby / No Stream placeholder for active slot */}
             {camStatus[activeSlot] !== 'connected' && (
               <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-gradient-to-b from-[#0a0f18] via-[#06090e] to-black">
+
+            {/* Object Detection Bounding Box Overlay Canvas */}
+            {objectDetectEnabled && camStatus[activeSlot] === 'connected' && (
+              <canvas
+                ref={overlayCanvasRef}
+                className="absolute inset-0 w-full h-full pointer-events-none z-10"
+                style={{ objectFit: 'contain' }}
+              />
+            )}
                 <div className="w-16 h-16 rounded-full p-0.5 bg-gradient-to-tr from-[#00a8b5] to-[#00e5ff] shadow-[0_0_20px_rgba(0,194,203,0.4)] mb-3">
                   <img src="/urrt-logo.png" alt="URRT" className="w-full h-full rounded-full object-cover bg-black" />
                 </div>
@@ -653,7 +989,243 @@ export default function CameraFeed({
           </div>
         </div>
 
+        {/* ─── AI Vision Detection Toggle Bar (Right side of viewport) ─── */}
+        <div className="absolute bottom-3 right-3 z-20 flex items-center pointer-events-auto">
+          <div className="flex items-center gap-1.5 bg-[#06090e]/90 backdrop-blur-md px-2.5 py-1 rounded-xl border border-[#162338]">
+            {/* QR Toggle */}
+            <button
+              onClick={() => { soundManager.playChirp(); setQrEnabled(q => !q); }}
+              className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-mono transition-colors ${
+                qrEnabled
+                  ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
+                  : 'bg-[#0f1624] text-slate-400 hover:text-white'
+              }`}
+              title="Toggle QR Code Scanner"
+            >
+              <QrCode className="w-3 h-3" />
+              <span>QR</span>
+            </button>
+
+            {/* Object Detection Toggle */}
+            <button
+              onClick={() => { soundManager.playChirp(); setObjectDetectEnabled(o => !o); }}
+              className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-mono transition-colors ${
+                objectDetectEnabled
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                  : 'bg-[#0f1624] text-slate-400 hover:text-white'
+              }`}
+              title="Toggle AI Object Detection (COCO-SSD)"
+            >
+              {modelLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+              <span>DETECT</span>
+            </button>
+
+            {/* Motion Detection Toggle */}
+            <button
+              onClick={() => { soundManager.playChirp(); setMotionDetectEnabled(m => !m); }}
+              className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-mono transition-colors ${
+                motionDetectEnabled
+                  ? motionAlert
+                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse'
+                    : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                  : 'bg-[#0f1624] text-slate-400 hover:text-white'
+              }`}
+              title="Toggle Motion Detection"
+            >
+              <Radio className="w-3 h-3" />
+              <span>MOTION {motionDetectEnabled ? `${motionLevel}%` : ''}</span>
+            </button>
+          </div>
+        </div>
+
       </div>
+
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {/* ─── AI VISION RESULTS PANEL (below video viewport) ────────── */}
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {(qrResult || detectedObjects.length > 0 || (motionDetectEnabled && motionLevel > 0)) && (
+        <div className={`px-3.5 py-2.5 border-t space-y-2 ${
+          theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-[#0a0f18]/95 border-[#162338]'
+        }`}>
+          <div className="flex items-center gap-2 mb-1">
+            <Sparkles className="w-3.5 h-3.5 text-[#00c2cb]" />
+            <span className="text-[11px] font-bold font-tech text-[#00c2cb] uppercase tracking-wider">AI Vision Intel</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+
+            {/* QR Detection Result */}
+            {qrEnabled && (
+              <div className={`rounded-xl p-2.5 border ${
+                qrResult
+                  ? 'bg-purple-500/10 border-purple-500/30'
+                  : theme === 'light' ? 'bg-white border-slate-200' : 'bg-[#0f1624] border-[#162338]'
+              }`}>
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <QrCode className="w-3.5 h-3.5 text-purple-400" />
+                  <span className="text-[10px] font-mono font-bold text-purple-400 uppercase">QR Scanner</span>
+                </div>
+                {qrResult ? (
+                  <div>
+                    {qrResult.isUrl ? (
+                      <a
+                        href={qrResult.data}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs font-mono text-blue-400 hover:text-blue-300 underline break-all block"
+                      >
+                        {qrResult.data}
+                      </a>
+                    ) : (
+                      <p className="text-xs font-mono text-slate-300 break-all">{qrResult.data}</p>
+                    )}
+                    <div className="flex items-center gap-1.5 mt-1.5">
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(qrResult.data);
+                          setCopiedQr(true);
+                          setTimeout(() => setCopiedQr(false), 2000);
+                          soundManager.playChirp();
+                        }}
+                        className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-purple-500/20 text-purple-300 text-[10px] font-mono hover:bg-purple-500/30 transition-colors"
+                      >
+                        {copiedQr ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                        <span>{copiedQr ? 'COPIED' : 'COPY'}</span>
+                      </button>
+                      {qrResult.isUrl && (
+                        <a
+                          href={qrResult.data}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-500/20 text-blue-300 text-[10px] font-mono hover:bg-blue-500/30 transition-colors"
+                        >
+                          <ArrowUpRight className="w-3 h-3" />
+                          <span>OPEN</span>
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[10px] font-mono text-slate-500">Scanning for QR codes...</p>
+                )}
+                {qrHistory.length > 1 && (
+                  <div className="mt-2 pt-1.5 border-t border-purple-500/20">
+                    <span className="text-[9px] font-mono text-slate-500 block mb-1">HISTORY ({qrHistory.length})</span>
+                    <div className="space-y-0.5 max-h-16 overflow-y-auto">
+                      {qrHistory.slice(1, 5).map((h, i) => (
+                        <p key={i} className="text-[9px] font-mono text-slate-400 truncate">{h.data}</p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Object Detection Results */}
+            {objectDetectEnabled && (
+              <div className={`rounded-xl p-2.5 border ${
+                detectedObjects.length > 0
+                  ? 'bg-amber-500/10 border-amber-500/30'
+                  : theme === 'light' ? 'bg-white border-slate-200' : 'bg-[#0f1624] border-[#162338]'
+              }`}>
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="text-[10px] font-mono font-bold text-amber-400 uppercase">Object Detection</span>
+                  {modelLoading && <Loader2 className="w-3 h-3 animate-spin text-amber-300" />}
+                </div>
+                {detectedObjects.length > 0 ? (
+                  <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                    {detectedObjects.map((obj, i) => (
+                      <div key={i} className="flex items-center gap-2 text-[10px] font-mono bg-[#0a0f18] rounded-lg px-2 py-1.5">
+                        {/* Color Swatch */}
+                        {obj.color && (
+                          <div
+                            className="w-4 h-4 rounded-full border border-white/30 flex-shrink-0"
+                            style={{ backgroundColor: obj.color.hex }}
+                            title={`RGB(${obj.color.r}, ${obj.color.g}, ${obj.color.b})`}
+                          />
+                        )}
+                        {/* Object Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-200 capitalize font-bold">{obj.class}</span>
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] ${
+                              obj.score > 80 ? 'bg-emerald-500/20 text-emerald-300' :
+                              obj.score > 50 ? 'bg-amber-500/20 text-amber-300' :
+                              'bg-rose-500/20 text-rose-300'
+                            }`}>
+                              {obj.score}%
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {obj.color && (
+                              <span className="text-[9px] text-slate-400">
+                                🎨 <span className="text-slate-300">{obj.color.name}</span>
+                              </span>
+                            )}
+                            {obj.shape && (
+                              <span className="text-[9px] text-slate-400">
+                                ◆ <span className="text-slate-300">{obj.shape}</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[10px] font-mono text-slate-500">
+                    {modelLoading ? 'Loading AI model...' : 'No objects detected'}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Motion Detection Meter */}
+            {motionDetectEnabled && (
+              <div className={`rounded-xl p-2.5 border ${
+                motionAlert
+                  ? 'bg-rose-500/10 border-rose-500/30'
+                  : theme === 'light' ? 'bg-white border-slate-200' : 'bg-[#0f1624] border-[#162338]'
+              }`}>
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Radio className={`w-3.5 h-3.5 ${motionAlert ? 'text-rose-400 animate-pulse' : 'text-emerald-400'}`} />
+                  <span className={`text-[10px] font-mono font-bold uppercase ${motionAlert ? 'text-rose-400' : 'text-emerald-400'}`}>
+                    Motion {motionAlert ? 'ALERT' : 'Monitor'}
+                  </span>
+                </div>
+                <div className="w-full h-2.5 rounded-full bg-[#162338] overflow-hidden mb-1.5">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${
+                      motionLevel > 60 ? 'bg-rose-500' :
+                      motionLevel > 25 ? 'bg-amber-500' :
+                      'bg-emerald-500'
+                    }`}
+                    style={{ width: `${motionLevel}%` }}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-[10px] font-mono">
+                  <span className="text-slate-500">Activity Level</span>
+                  <span className={`font-bold ${
+                    motionLevel > 60 ? 'text-rose-400' :
+                    motionLevel > 25 ? 'text-amber-400' :
+                    'text-emerald-400'
+                  }`}>
+                    {motionLevel}%
+                  </span>
+                </div>
+                {motionAlert && (
+                  <div className="mt-1.5 flex items-center gap-1 text-[9px] font-mono text-rose-400">
+                    <span className="w-1.5 h-1.5 bg-rose-500 rounded-full animate-ping" />
+                    <span>Significant motion detected!</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
 
       {/* Enlarged Floating Sticky Picture-in-Picture Mini-HUD with Size & Channel Controls */}
       {isScrolledOut && !isFloatingDismissed && (
