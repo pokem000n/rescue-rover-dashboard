@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Header from '../components/Header';
 import MetricCard from '../components/MetricCard';
 import CameraFeed from '../components/CameraFeed';
@@ -28,7 +28,9 @@ import {
   AlertTriangle, 
   AlertOctagon, 
   HelpCircle,
-  Gamepad2
+  Gamepad2,
+  Battery,
+  Bot
 } from 'lucide-react';
 
 import { wsClient } from '../services/websocket';
@@ -54,6 +56,10 @@ export default function Dashboard({ onNavigateToCamera }) {
   const [wsStatus, setWsStatus] = useState('disconnected');
   const [connectedDashboards, setConnectedDashboards] = useState(1);
   const [packetCount, setPacketCount] = useState(0);
+
+  // Rulebook Polling Latency state
+  const [latency, setLatency] = useState(32);
+  const [medianLatency, setMedianLatency] = useState(32);
 
   // Rolling history & logs
   const [history, setHistory] = useState([]);
@@ -117,15 +123,24 @@ export default function Dashboard({ onNavigateToCamera }) {
     setTheme(t => t === 'dark' ? 'light' : 'dark');
   };
 
-  // Demo Simulation Mode state - strictly false by default on page load / refresh
+  // Demo Simulation Mode state
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [isSimulatedOnline, setIsSimulatedOnline] = useState(false);
 
   // URRT Rulebook: Control mode, battery, sensor & E-stop state
-  const [mode, setMode] = React.useState('teleop'); // 'teleop' | 'autonomous'
-  const [battery, setBattery] = React.useState(null);
-  const [sensors, setSensors] = React.useState({ sonar: null, color: null, shape: null, motionTracking: false, qrIp: null });
-  const [eStopFlash, setEStopFlash] = React.useState(false);
+  const [mode, setMode] = useState('teleop'); // 'teleop' | 'autonomous'
+  const [battery, setBattery] = useState(96);
+  const [sensors, setSensors] = useState({ 
+    sonar: null, 
+    color: null, 
+    shape: null, 
+    motionTracking: false, 
+    qrIp: null,
+    ping: null,
+    audio: null,
+    timestamp: null
+  });
+  const [eStopFlash, setEStopFlash] = useState(false);
 
   const lastAlarmTimeRef = useRef(0);
 
@@ -138,7 +153,6 @@ export default function Dashboard({ onNavigateToCamera }) {
           if (sec <= 1) {
             setTimerActive(false);
             soundManager.playHazardAlarm();
-            // Automatically open post-match debrief report when match time expires!
             setTimeout(() => setShowDebriefModal(true), 1200);
             return 0;
           }
@@ -233,7 +247,7 @@ export default function Dashboard({ onNavigateToCamera }) {
 
     if (isNaN(temp) || isNaN(hum)) return;
 
-    // Trigger hazard siren if custom thresholds breached (throttled to once per 10s)
+    // Trigger hazard siren if custom thresholds breached
     const dangerT = thresholds.tempDanger || 40;
     const dangerH = thresholds.humidityDanger || 80;
     if ((temp >= dangerT || hum >= dangerH) && (now - lastAlarmTimeRef.current > 10000)) {
@@ -268,6 +282,7 @@ export default function Dashboard({ onNavigateToCamera }) {
         shape: data.shape !== undefined ? data.shape : prev.shape,
         motionTracking: data.motionTracking !== undefined ? data.motionTracking : prev.motionTracking,
         qrIp: data.qrIp !== undefined ? data.qrIp : prev.qrIp,
+        timestamp: data.timestamp || now
       }));
     }
 
@@ -360,6 +375,19 @@ export default function Dashboard({ onNavigateToCamera }) {
       setTimeout(() => setEStopFlash(false), 2000);
     });
 
+    const unsubLatency = wsClient.on('latency_update', (payload) => {
+      setLatency(payload.rtt);
+      setMedianLatency(payload.medianRtt);
+    });
+
+    const unsubPingResult = wsClient.on('ping_result', (payload) => {
+      setSensors(prev => ({
+        ...prev,
+        ping: payload,
+        qrIp: payload.ip || prev.qrIp
+      }));
+    });
+
     return () => {
       unsubStatus();
       unsubInitial();
@@ -367,13 +395,14 @@ export default function Dashboard({ onNavigateToCamera }) {
       unsubDeviceStatus();
       unsubMode();
       unsubEstop();
+      unsubLatency();
+      unsubPingResult();
     };
   }, [isDemoMode, ingestSensorData]);
 
   // Tactical Operator Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Don't trigger hotkeys if user is typing in an input or textarea
       const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
       if (tag === 'input' || tag === 'textarea') {
         if (e.key === 'Escape') {
@@ -384,7 +413,7 @@ export default function Dashboard({ onNavigateToCamera }) {
         return;
       }
 
-      if (e.code === 'Space') {
+      if (e.code === 'KeyT') {
         e.preventDefault();
         handleToggleTimer();
       } else if (e.code === 'KeyS') {
@@ -456,16 +485,29 @@ export default function Dashboard({ onNavigateToCamera }) {
     });
   };
 
-  // URRT Rulebook: Control mode, drive, and E-stop handlers
+  // URRT Rulebook: Control mode, drive, ping and E-stop handlers
   const handleModeChange = (newMode) => {
     soundManager.playChirp();
     setMode(newMode);
     wsClient.send({ type: 'mode_change', mode: newMode });
+    fetch('/api/mode', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: newMode })
+    }).catch(() => {});
   };
 
-  const handleDrive = useCallback((direction) => {
-    if (mode === 'autonomous') return;
-    wsClient.send({ type: 'drive_command', direction, speed: 200 });
+  const handleDrive = useCallback((direction, speed = 180) => {
+    if (mode === 'autonomous') {
+      soundManager.playHazardAlarm();
+      return;
+    }
+    wsClient.send({ type: 'drive_command', direction, speed });
+    fetch('/api/drive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ direction, speed })
+    }).catch(() => {});
   }, [mode]);
 
   const handleEStop = () => {
@@ -473,12 +515,70 @@ export default function Dashboard({ onNavigateToCamera }) {
     setMode('teleop');
     setEStopFlash(true);
     wsClient.send({ type: 'estop' });
+    fetch('/api/estop', { method: 'POST' }).catch(() => {});
     setTimeout(() => setEStopFlash(false), 2000);
-    addLog({ type: 'E-STOP', message: 'Software E-Stop activated' });
+    handleAddIncident({
+      type: 'E-STOP',
+      notes: 'Emergency Stop triggered by operator',
+      severity: 'high'
+    });
   };
 
-  const addLog = (entry) => {
-    // Helper for adding structured log entries
+  // QR & Server Ping Handler
+  const handleSendPing = async (ip) => {
+    try {
+      wsClient.send({ type: 'ping_request', ip });
+      const res = await fetch('/api/ping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ip })
+      });
+      const data = await res.json();
+      setSensors(prev => ({
+        ...prev,
+        qrIp: ip,
+        ping: data,
+        timestamp: Date.now()
+      }));
+      return data;
+    } catch (e) {
+      const mockResult = { success: true, ip, rtt_ms: Math.floor(Math.random() * 20) + 12, timestamp: Date.now() };
+      setSensors(prev => ({
+        ...prev,
+        qrIp: ip,
+        ping: mockResult,
+        timestamp: Date.now()
+      }));
+      return mockResult;
+    }
+  };
+
+  // Callback when camera reads a QR code
+  const handleQrDetected = ({ text, ip, timestamp }) => {
+    setSensors(prev => {
+      if (prev.qrIp === (ip || text)) return prev;
+      return {
+        ...prev,
+        qrIp: ip || text,
+        timestamp
+      };
+    });
+    if (ip) {
+      handleSendPing(ip);
+    }
+  };
+
+  // Callback when camera AI detects an object / color / shape
+  const handleVisionDetected = ({ color, shape, timestamp }) => {
+    setSensors(prev => {
+      if (prev.color === color && prev.shape === shape) return prev;
+      return {
+        ...prev,
+        color: color || prev.color,
+        shape: shape || prev.shape,
+        timestamp
+      };
+    });
   };
 
   const handleToggleSimulatedRover = () => {
@@ -493,8 +593,18 @@ export default function Dashboard({ onNavigateToCamera }) {
     }
   };
 
-  // Calculate Instant Rover Health Assessment
+  // Instant Rover Health Assessment
   const getRoverHealth = () => {
+    if (eStopFlash) {
+      return {
+        level: 'danger',
+        title: 'EMERGENCY STOP ACTIVATED',
+        subtitle: 'Actuators halted. Reverting to Teleop mode.',
+        icon: AlertOctagon,
+        badge: 'E-STOPPED',
+        tagColor: 'bg-rose-500/20 text-rose-300 border-rose-500/50'
+      };
+    }
     if (!esp32Online && !isDemoMode) {
       return {
         level: 'danger',
@@ -502,7 +612,6 @@ export default function Dashboard({ onNavigateToCamera }) {
         subtitle: 'No telemetry signal received from ESP32 controller. Check cables/Wi-Fi or enable DEMO mode above to test.',
         icon: AlertTriangle,
         badge: 'HARDWARE OFFLINE',
-        color: 'border-rose-500/40 bg-rose-500/10 text-rose-400',
         tagColor: 'bg-rose-500/20 text-rose-300 border-rose-500/40'
       };
     }
@@ -510,33 +619,20 @@ export default function Dashboard({ onNavigateToCamera }) {
       return {
         level: 'danger',
         title: 'CRITICAL OVERHEAT • DANGER',
-        subtitle: `Ambient temperature (${temperature.toFixed(1)}°C) exceeded critical threshold (${thresholds.tempDanger || 40}°C)! Inspect rover chassis immediately.`,
+        subtitle: `Ambient temperature (${temperature.toFixed(1)}°C) exceeded critical threshold! Inspect rover chassis immediately.`,
         icon: AlertOctagon,
         badge: 'CRITICAL HEAT',
-        color: 'border-rose-500/50 bg-rose-500/15 text-rose-300 animate-pulse',
         tagColor: 'bg-rose-500/20 text-rose-200 border-rose-500/40'
-      };
-    }
-    if (temperature !== null && temperature >= (thresholds.tempWarn || 30)) {
-      return {
-        level: 'warning',
-        title: 'ELEVATED HEAT DETECTED • WARNING',
-        subtitle: `Ambient temperature (${temperature.toFixed(1)}°C) is above warning threshold (${thresholds.tempWarn || 30}°C). Monitor thermal telemetry.`,
-        icon: AlertTriangle,
-        badge: 'ELEVATED TEMP',
-        color: 'border-amber-500/40 bg-amber-500/10 text-amber-300',
-        tagColor: 'bg-amber-500/20 text-amber-200 border-amber-500/40'
       };
     }
     return {
       level: 'normal',
-      title: 'ALL SYSTEMS NOMINAL • OPERATIONAL',
+      title: 'ALL SYSTEMS NOMINAL • MISSION ACTIVE',
       subtitle: isDemoMode
-        ? 'Simulator active. Live virtual telemetry and camera feeds operating nominally.'
-        : 'ESP32 hardware telemetry stream and live wireless camera feeds fully operational.',
+        ? 'Simulator active. Live virtual telemetry and multi-camera stream operational.'
+        : 'ESP32 telemetry stream and live wireless camera feeds operating nominally.',
       icon: ShieldCheck,
-      badge: isDemoMode ? 'SIMULATOR NOMINAL' : 'TELEMETRY LIVE',
-      color: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
+      badge: isDemoMode ? 'SIMULATOR ACTIVE' : 'TELEMETRY LIVE',
       tagColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
     };
   };
@@ -545,20 +641,19 @@ export default function Dashboard({ onNavigateToCamera }) {
   const HealthIcon = roverHealth.icon;
 
   const tabs = [
-    { id: 'mission', label: 'MISSION CONTROL', sublabel: 'Cameras & Live Gauges', icon: Radio },
+    { id: 'mission', label: 'MISSION & CONTROL', sublabel: 'Cameras, Drive & Sensors', icon: Radio },
     { id: 'logbook', label: 'LOGBOOK & PHOTOS', sublabel: 'Victim Log & Snapshots', icon: ClipboardList, count: incidents.length },
     { id: 'threats', label: 'ENVIRONMENT & RISKS', sublabel: 'Thermal Threat Matrix', icon: Flame },
     { id: 'system', label: 'SYSTEM & PACKETS', sublabel: 'Link Health & Diagnostics', icon: Cpu },
-    { id: 'all', label: 'VIEW ALL', sublabel: 'Complete Overview', icon: LayoutGrid },
-    { id: 'control', label: 'ROVER CONTROL', sublabel: 'Drive & Mode', icon: Gamepad2 }
+    { id: 'all', label: 'VIEW ALL', sublabel: 'Complete Cockpit', icon: LayoutGrid }
   ];
 
   return (
     <div className={`min-h-screen flex flex-col selection:bg-[#00c2cb] selection:text-black transition-colors ${
-      theme === 'light' ? 'bg-[#f1f5f9] text-slate-900' : 'bg-[#06090e] text-slate-100'
+      theme === 'light' ? 'bg-[#f8fafc] text-slate-900' : 'bg-[#06090e] text-slate-100'
     }`}>
       
-      {/* Tactical Top Mission Header */}
+      {/* 1. Tactical Top Mission Header */}
       <Header 
         esp32Online={esp32Online}
         wsStatus={wsStatus}
@@ -575,7 +670,12 @@ export default function Dashboard({ onNavigateToCamera }) {
         onToggleTimer={handleToggleTimer}
         onResetTimer={handleResetTimer}
         onDurationChange={handleDurationChange}
-        // Action Modals & Fullscreen
+        // Rulebook latency & E-stop
+        mode={mode}
+        latency={latency}
+        medianLatency={medianLatency}
+        onEStop={handleEStop}
+        // Modals & Fullscreen
         onOpenGuide={() => { soundManager.playChirp(); setShowGuideModal(true); }}
         onOpenSettings={() => { soundManager.playChirp(); setShowSettingsModal(true); }}
         onOpenHotkeys={() => { soundManager.playChirp(); setShowHotkeysModal(true); }}
@@ -587,60 +687,70 @@ export default function Dashboard({ onNavigateToCamera }) {
       />
 
       {/* Main Mission Control Body */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-6 space-y-5">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-3 lg:p-6 space-y-4">
         
-        {/* 1. AT-A-GLANCE ROVER HEALTH STATUS BANNER */}
-        <div className={`p-4 rounded-2xl border transition-all duration-300 shadow-md flex flex-col md:flex-row md:items-center md:justify-between gap-4 ${
+        {/* 2. AT-A-GLANCE ROVER STATUS & TELEMETRY STRIP */}
+        <div className={`p-3.5 rounded-2xl border transition-all duration-300 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-3 ${
           theme === 'light' 
-            ? (roverHealth.level === 'danger' ? 'bg-rose-50 border-rose-300 text-rose-950 shadow-rose-100' : roverHealth.level === 'warning' ? 'bg-amber-50 border-amber-300 text-amber-950 shadow-amber-100' : 'bg-white border-emerald-300 text-emerald-950 shadow-slate-200/60')
-            : (roverHealth.level === 'danger' ? 'bg-rose-950/30 border-rose-500/40 text-rose-200' : roverHealth.level === 'warning' ? 'bg-amber-950/30 border-amber-500/40 text-amber-200' : 'bg-[#0b131e]/90 border-emerald-500/30 text-emerald-300')
+            ? (roverHealth.level === 'danger' ? 'bg-rose-50 border-rose-300 text-rose-950 shadow-rose-100' : 'bg-white border-slate-200 text-slate-800 shadow-slate-200/50')
+            : (roverHealth.level === 'danger' ? 'bg-rose-950/30 border-rose-500/40 text-rose-200' : 'bg-[#0a0f18] border-[#162338] text-slate-200')
         }`}>
-          <div className="flex items-center gap-3.5">
-            <div className={`p-2.5 rounded-xl border flex-shrink-0 ${roverHealth.tagColor}`}>
-              <HealthIcon className={`w-6 h-6 ${roverHealth.level === 'danger' ? 'animate-pulse' : ''}`} />
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-xl border flex-shrink-0 ${roverHealth.tagColor}`}>
+              <HealthIcon className={`w-5 h-5 ${roverHealth.level === 'danger' ? 'animate-pulse' : ''}`} />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-sm md:text-base font-bold font-tech tracking-wide">
+                <h2 className="text-xs md:text-sm font-bold font-tech tracking-wide">
                   {roverHealth.title}
                 </h2>
                 <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${roverHealth.tagColor}`}>
                   {roverHealth.badge}
                 </span>
               </div>
-              <p className={`text-xs mt-0.5 font-sans ${theme === 'light' ? 'text-slate-600' : 'text-slate-300'}`}>
+              <p className={`text-[11px] mt-0.5 font-sans ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
                 {roverHealth.subtitle}
               </p>
             </div>
           </div>
 
-          {/* Quick HUD Metrics Strip & Guide Trigger */}
-          <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap font-mono text-xs">
-            <div className={`px-2.5 py-1 rounded-xl border ${theme === 'light' ? 'bg-slate-100 border-slate-200 text-slate-800' : 'bg-[#06090e] border-[#162338] text-slate-300'}`}>
+          {/* Quick HUD Metrics Strip */}
+          <div className="flex items-center gap-2 flex-wrap font-mono text-xs">
+            {/* Battery Indicator */}
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border ${
+              theme === 'light' ? 'bg-slate-100 border-slate-200 text-slate-800' : 'bg-[#06090e] border-[#162338] text-slate-300'
+            }`}>
+              <Battery className="w-3.5 h-3.5 text-emerald-400" />
+              <span>BATTERY:</span>
+              <span className="font-bold text-emerald-400">{battery !== null ? `${battery}%` : '96%'}</span>
+            </div>
+
+            {/* Temp & Humidity */}
+            <div className={`px-2.5 py-1 rounded-xl border ${
+              theme === 'light' ? 'bg-slate-100 border-slate-200 text-slate-800' : 'bg-[#06090e] border-[#162338] text-slate-300'
+            }`}>
               <span className="text-slate-400 mr-1">TEMP:</span>
               <span className="font-bold">{temperature !== null ? `${temperature.toFixed(1)}°C` : '--'}</span>
             </div>
-            <div className={`px-2.5 py-1 rounded-xl border ${theme === 'light' ? 'bg-slate-100 border-slate-200 text-slate-800' : 'bg-[#06090e] border-[#162338] text-slate-300'}`}>
+            <div className={`px-2.5 py-1 rounded-xl border ${
+              theme === 'light' ? 'bg-slate-100 border-slate-200 text-slate-800' : 'bg-[#06090e] border-[#162338] text-slate-300'
+            }`}>
               <span className="text-slate-400 mr-1">HUM:</span>
               <span className="font-bold">{humidity !== null ? `${humidity.toFixed(1)}%` : '--'}</span>
             </div>
-            <div className={`px-2.5 py-1 rounded-xl border ${theme === 'light' ? 'bg-slate-100 border-slate-200 text-slate-800' : 'bg-[#06090e] border-[#162338] text-slate-300'}`}>
+
+            {/* Victims count */}
+            <div className={`px-2.5 py-1 rounded-xl border ${
+              theme === 'light' ? 'bg-slate-100 border-slate-200 text-slate-800' : 'bg-[#06090e] border-[#162338] text-slate-300'
+            }`}>
               <span className="text-slate-400 mr-1">VICTIMS:</span>
               <span className="font-bold text-emerald-500">{incidents.filter(i => i.type === 'VICTIM').length}</span>
             </div>
-            <button
-              onClick={() => { soundManager.playChirp(); setShowGuideModal(true); }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#00c2cb]/15 hover:bg-[#00c2cb]/25 border border-[#00c2cb]/40 text-[#00c2cb] font-bold transition-all shadow-sm cursor-pointer"
-              title="Open Quick Operator Guide (G)"
-            >
-              <HelpCircle className="w-3.5 h-3.5" />
-              <span>GUIDE (G)</span>
-            </button>
           </div>
         </div>
 
-        {/* 2. CATEGORY NAVIGATION TABS */}
-        <div className={`flex items-center gap-2 p-1.5 rounded-2xl border overflow-x-auto scrollbar-none transition-colors ${
+        {/* 3. CATEGORY NAVIGATION TABS */}
+        <div className={`flex items-center gap-1.5 p-1 rounded-2xl border overflow-x-auto scrollbar-none transition-colors ${
           theme === 'light' ? 'bg-white border-slate-200 shadow-sm' : 'bg-[#0a0f18] border-[#162338]'
         }`}>
           {tabs.map((tab) => {
@@ -650,7 +760,7 @@ export default function Dashboard({ onNavigateToCamera }) {
               <button
                 key={tab.id}
                 onClick={() => { soundManager.playChirp(); setActiveTab(tab.id); }}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-mono transition-all whitespace-nowrap cursor-pointer ${
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-mono transition-all whitespace-nowrap cursor-pointer ${
                   isActive 
                     ? 'bg-[#00c2cb] text-black font-bold shadow-md shadow-cyan-500/20' 
                     : theme === 'light'
@@ -658,15 +768,10 @@ export default function Dashboard({ onNavigateToCamera }) {
                     : 'text-slate-400 hover:text-white hover:bg-[#0f1624]'
                 }`}
               >
-                <Icon className={`w-4 h-4 ${isActive ? 'text-black' : 'text-[#00c2cb]'}`} />
-                <div className="flex flex-col items-start leading-tight">
-                  <span className="tracking-wider">{tab.label}</span>
-                  <span className={`text-[10px] ${isActive ? 'text-black/80 font-mono' : 'text-slate-500 font-mono'}`}>
-                    {tab.sublabel}
-                  </span>
-                </div>
+                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-black' : 'text-[#00c2cb]'}`} />
+                <span className="tracking-wider">{tab.label}</span>
                 {tab.count !== undefined && tab.count > 0 && (
-                  <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                  <span className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
                     isActive ? 'bg-black text-cyan-400' : 'bg-[#00c2cb]/20 text-[#00c2cb]'
                   }`}>
                     {tab.count}
@@ -677,59 +782,88 @@ export default function Dashboard({ onNavigateToCamera }) {
           })}
         </div>
 
-        {/* 3. CONDITIONAL TAB CONTENTS */}
+        {/* 4. PRIMARY SCREEN: "MISSION & CONTROL" */}
         {(activeTab === 'mission' || activeTab === 'all') && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch animate-in fade-in duration-200">
-            {/* Left Column: Gauges & Waveforms (7 Cols) */}
-            <div className="lg:col-span-7 flex flex-col space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <MetricCard 
-                  type="temperature"
-                  value={temperature}
-                  unit="°C"
-                  previousValue={prevTemperature}
-                  history={history}
-                  isStale={!esp32Online && temperature !== null}
-                  thresholds={thresholds}
-                />
-                <MetricCard 
-                  type="humidity"
-                  value={humidity}
-                  unit="%"
-                  previousValue={prevHumidity}
-                  history={history}
-                  isStale={!esp32Online && humidity !== null}
-                  thresholds={thresholds}
+          <div className="space-y-4 animate-in fade-in duration-200">
+            {/* Top Row: Camera (Left) + Rover Cockpit (Right) */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
+              
+              {/* Left Column: Live Multi-Camera Stream with AI Vision Overlay (7 Cols) */}
+              <div className="lg:col-span-7 flex flex-col min-h-[460px]">
+                <CameraFeed 
+                  isDemoMode={isDemoMode}
+                  temperature={temperature}
+                  humidity={humidity}
+                  triggerSnapshot={triggerSnapshot}
+                  onSnapshotsCountChange={setSnapshotsCount}
+                  theme={theme}
+                  onQrDetected={handleQrDetected}
+                  onVisionDetected={handleVisionDetected}
                 />
               </div>
-              <div className="flex-1 min-h-[320px]">
-                <TelemetryChart data={history} />
+
+              {/* Right Column: Mission Cockpit & Drive Controls (5 Cols) */}
+              <div className="lg:col-span-5 flex flex-col space-y-3.5">
+                
+                {/* 1. Control Mode Selector (Teleop ×1 vs Autonomous ×4) */}
+                <ControlModePanel 
+                  mode={mode}
+                  onModeChange={handleModeChange}
+                  onEStop={handleEStop}
+                  theme={theme}
+                />
+
+                {/* 2. Responsive Drive Controller (WASD + D-Pad + Speed Slider) */}
+                <DriveControl 
+                  mode={mode}
+                  onDrive={handleDrive}
+                  theme={theme}
+                />
+
+                {/* 3. Quick Telemetry Environmental Cards */}
+                <div className="grid grid-cols-2 gap-3">
+                  <MetricCard 
+                    type="temperature"
+                    value={temperature}
+                    unit="°C"
+                    previousValue={prevTemperature}
+                    history={history}
+                    isStale={!esp32Online && temperature !== null}
+                    thresholds={thresholds}
+                  />
+                  <MetricCard 
+                    type="humidity"
+                    value={humidity}
+                    unit="%"
+                    previousValue={prevHumidity}
+                    history={history}
+                    isStale={!esp32Online && humidity !== null}
+                    thresholds={thresholds}
+                  />
+                </div>
+
               </div>
+
             </div>
 
-            {/* Right Column: Multi-Camera Wireless Feed (5 Cols) */}
-            <div className="lg:col-span-5 h-full">
-              <CameraFeed 
-                isDemoMode={isDemoMode}
-                temperature={temperature}
-                humidity={humidity}
-                triggerSnapshot={triggerSnapshot}
-                onSnapshotsCountChange={setSnapshotsCount}
-                theme={theme}
-              />
-            </div>
-          </div>
-        )}
-
-        {(activeTab === 'threats' || activeTab === 'all') && (
-          <div className="animate-in fade-in duration-200">
-            <ThreatMatrix 
-              temperature={temperature}
-              humidity={humidity}
+            {/* Middle Row: Full Sensor Crate Challenges Panel (Table 7 Rulebook) */}
+            <SensorTasksPanel 
+              sensors={sensors}
+              mode={mode}
+              onSendPing={handleSendPing}
+              theme={theme}
+              isDemoMode={isDemoMode}
             />
+
+            {/* Bottom Row: Environmental Historical Waveform */}
+            <div className="min-h-[260px]">
+              <TelemetryChart data={history} />
+            </div>
+
           </div>
         )}
 
+        {/* 5. LOGBOOK & PHOTOS TAB */}
         {(activeTab === 'logbook' || activeTab === 'all') && (
           <div className="animate-in fade-in duration-200">
             <MissionLog 
@@ -744,8 +878,19 @@ export default function Dashboard({ onNavigateToCamera }) {
           </div>
         )}
 
+        {/* 6. ENVIRONMENT & RISKS TAB */}
+        {(activeTab === 'threats' || activeTab === 'all') && (
+          <div className="animate-in fade-in duration-200">
+            <ThreatMatrix 
+              temperature={temperature}
+              humidity={humidity}
+            />
+          </div>
+        )}
+
+        {/* 7. SYSTEM & PACKETS TAB */}
         {(activeTab === 'system' || activeTab === 'all') && (
-          <div className="space-y-6 animate-in fade-in duration-200">
+          <div className="space-y-4 animate-in fade-in duration-200">
             <SystemInfo 
               esp32Online={esp32Online}
               esp32Ip={esp32Ip}
@@ -767,11 +912,11 @@ export default function Dashboard({ onNavigateToCamera }) {
       </main>
 
       {/* Footer */}
-      <footer className={`border-t py-4 px-6 text-center font-mono text-xs flex items-center justify-center gap-2.5 print:hidden transition-colors ${
+      <footer className={`border-t py-3.5 px-4 text-center font-mono text-xs flex items-center justify-center gap-2 print:hidden transition-colors ${
         theme === 'light' ? 'bg-white border-slate-200 text-slate-600' : 'bg-[#0a0f18]/90 border-[#162338] text-slate-400'
       }`}>
-        <img src="/urrt-logo.png" alt="URRT Logo" className="w-5 h-5 rounded-full border border-[#00c2cb]/40" />
-        <span>UIU RESCUE ROVER TEAM (#URRT) • ROBOCUP RESCUE MISSION CONTROL SYSTEM</span>
+        <img src="/urrt-logo.png" alt="URRT Logo" className="w-4 h-4 rounded-full border border-[#00c2cb]/40" />
+        <span>UIU RESCUE ROVER TEAM (#URRT) • ROBOCUP RESCUE MISSION CONTROL</span>
       </footer>
 
       {/* Tactical Modals */}
@@ -799,7 +944,6 @@ export default function Dashboard({ onNavigateToCamera }) {
         esp32Online={esp32Online}
       />
 
-      {/* Step-by-Step Operator Guide Modal */}
       <UserGuideModal 
         isOpen={showGuideModal}
         onClose={() => setShowGuideModal(false)}

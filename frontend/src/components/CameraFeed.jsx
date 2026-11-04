@@ -379,7 +379,7 @@ export default function CameraFeed({
       if (objectDetectEnabled && cocoModelRef.current) {
         try {
           const predictions = await cocoModelRef.current.detect(video, 10, 0.4);
-          setDetectedObjects(predictions.map(p => {
+          const processedObjects = predictions.map(p => {
             const [bx, by, bw, bh] = p.bbox;
             // ── Dominant Color Analysis ──
             let rSum = 0, gSum = 0, bSum = 0, count = 0;
@@ -415,7 +415,19 @@ export default function CameraFeed({
               color: { hex: dominantHex, name: colorName, r: avgR, g: avgG, b: avgB },
               shape: shapeName
             };
-          }));
+          });
+          setDetectedObjects(processedObjects);
+          if (processedObjects.length > 0) {
+            try {
+              onVisionDetected({
+                color: processedObjects[0].color?.name || null,
+                colorHex: processedObjects[0].color?.hex || null,
+                shape: processedObjects[0].shape || null,
+                objectClass: processedObjects[0].class,
+                timestamp: Date.now()
+              });
+            } catch (e) {}
+          }
         } catch (e) { /* ignore detection errors */ }
       }
 
@@ -643,7 +655,7 @@ export default function CameraFeed({
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     // Mobile phones cannot open laptop's "localhost", and camera permissions require HTTPS.
     // Use the live Vercel HTTPS domain when on localhost so smartphones can scan and stream effortlessly.
-    const baseUrl = isLocalhost ? 'https://urrt-alif-af28.vercel.app' : window.location.origin;
+    const baseUrl = isLocalhost ? 'https://frontend-teal-eta-93.vercel.app' : window.location.origin;
     return `${baseUrl}/camera?room=${roomCode}-${slot.subId}&cam=${slotId === 'cam2' ? '2' : slotId === 'cam3' ? '3' : '1'}&name=${encodeURIComponent(slot.role)}`;
   };
 

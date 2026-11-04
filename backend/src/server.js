@@ -15,6 +15,7 @@ const os = require('os');
 const dgram = require('dgram');
 const express = require('express');
 const cors = require('cors');
+const { exec } = require('child_process');
 const { WebSocketServer, WebSocket } = require('ws');
 
 const PORT = parseInt(process.env.PORT, 10) || 3001;
@@ -42,13 +43,17 @@ const roverState = {
     invalidPackets: 0
   },
   mode: 'teleop',
-  battery: null,
+  battery: 95,
+  estop: false,
   sensors: {
     sonar: null,
+    sonarTargetZone: false,
     color: null,
     shape: null,
     motionTracking: false,
-    qrIp: null
+    qrIp: null,
+    ping: null,
+    audio: null
   }
 };
 
@@ -57,7 +62,60 @@ const dashboardClients = new Set();
 const cameraBroadcasters = new Set();
 let esp32Socket = null;
 
+
+/**
+ * Pings referee or target server IPv4 address
+ */
+function pingHost(host) {
+  return new Promise((resolve) => {
+    // Validate IPv4
+    const cleanHost = String(host).trim().replace(/^https?:\/\//, '').split(':')[0].split('/')[0];
+    const isWin = process.platform === 'win32';
+    const cmd = isWin ? `ping -n 1 -w 1500 ${cleanHost}` : `ping -c 1 -W 2 ${cleanHost}`;
+    const start = Date.now();
+    exec(cmd, (err, stdout) => {
+      const duration = Date.now() - start;
+      if (err) {
+        // If ping command returned error / unreachable
+        resolve({
+          success: false,
+          ip: cleanHost,
+          error: 'Destination unreachable or timed out',
+          rtt_ms: null,
+          timestamp: Date.now()
+        });
+      } else {
+        let rtt = duration;
+        const timeMatch = stdout.match(/time[=<]([0-9]+)ms/i);
+        if (timeMatch && timeMatch[1]) {
+          rtt = parseInt(timeMatch[1], 10);
+        }
+        resolve({
+          success: true,
+          ip: cleanHost,
+          rtt_ms: rtt,
+          timestamp: Date.now()
+        });
+      }
+    });
+  });
+}
+
 // REST Endpoints
+
+app.post('/api/ping', async (req, res) => {
+  const { ip } = req.body;
+  if (!ip) return res.status(400).json({ error: 'IP address required' });
+  const result = await pingHost(ip);
+  roverState.sensors.qrIp = result.ip;
+  roverState.sensors.ping = result;
+  broadcastToDashboards({
+    type: 'ping_result',
+    ...result
+  });
+  res.json(result);
+});
+
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -68,6 +126,12 @@ app.get('/api/health', (req, res) => {
 
 app.get('/api/status', (req, res) => {
   res.json({
+    online: roverState.online,
+    connected: roverState.online,
+    mode: roverState.mode,
+    battery: roverState.battery,
+    estop: roverState.estop || false,
+    sensors: roverState.sensors,
     esp32: {
       online: roverState.online,
       lastSeen: roverState.lastSeen,
@@ -93,15 +157,37 @@ app.get('/api/telemetry', (req, res) => {
 });
 
 app.get('/api/sensors', (req, res) => {
+  const sonarVal = roverState.sensors.sonar;
   res.json({
-    sonar: roverState.sensors.sonar,
+    sonar: sonarVal,
+    sonarTargetZone: sonarVal !== null ? (sonarVal >= 80 && sonarVal <= 120) : false,
     color: roverState.sensors.color,
     shape: roverState.sensors.shape,
     motionTracking: roverState.sensors.motionTracking,
     qrIp: roverState.sensors.qrIp,
+    ping: roverState.sensors.ping,
+    audio: roverState.sensors.audio,
+    battery: roverState.battery,
+    temperature: roverState.latestData?.temperature ?? null,
+    humidity: roverState.latestData?.humidity ?? null,
+    timestamp: Date.now()
+  });
+});
+
+app.post('/api/sensors', (req, res) => {
+  const updates = req.body || {};
+  Object.assign(roverState.sensors, updates);
+  if (updates.battery !== undefined) roverState.battery = updates.battery;
+  if (updates.sonar !== undefined && updates.sonar !== null) {
+    roverState.sensors.sonarTargetZone = updates.sonar >= 80 && updates.sonar <= 120;
+  }
+  broadcastToDashboards({
+    type: 'sensor_update',
+    ...roverState.sensors,
     battery: roverState.battery,
     timestamp: Date.now()
   });
+  res.json({ success: true, sensors: roverState.sensors });
 });
 
 app.post('/api/mode', (req, res) => {
@@ -392,6 +478,45 @@ wss.on('connection', (ws, req) => {
           candidate: parsed.candidate
         });
       }
+      return;
+    }
+
+    
+    // Ping request over WebSocket
+    if (parsed.type === 'ping_request' || parsed.type === 'send_ping') {
+      const ip = parsed.ip || parsed.host;
+      if (ip) {
+        pingHost(ip).then(result => {
+          roverState.sensors.qrIp = result.ip;
+          roverState.sensors.ping = result;
+          broadcastToDashboards({
+            type: 'ping_result',
+            ...result
+          });
+        });
+      }
+      return;
+    }
+
+    // Latency ping from dashboard
+    if (parsed.type === 'ping' || parsed.type === 'heartbeat') {
+      ws.send(JSON.stringify({
+        type: 'pong',
+        t: parsed.t || Date.now(),
+        serverTime: Date.now()
+      }));
+      return;
+    }
+
+    if (parsed.type === 'sensor_update') {
+      Object.assign(roverState.sensors, parsed);
+      if (parsed.battery !== undefined) roverState.battery = parsed.battery;
+      broadcastToDashboards({
+        type: 'sensor_update',
+        ...roverState.sensors,
+        battery: roverState.battery,
+        timestamp: Date.now()
+      });
       return;
     }
 

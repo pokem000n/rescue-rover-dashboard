@@ -2,6 +2,7 @@
  * UIU Rescue Rover - WebSocket Client Service
  * 
  * Provides robust connection management, auto-reconnect with backoff,
+ * live RTT ping-pong latency measurement (<=100ms rulebook target),
  * and typed message listener subscription.
  */
 
@@ -16,6 +17,10 @@ class WebSocketClient {
     this.reconnectTimeout = null;
     this.status = 'disconnected'; // 'connected' | 'connecting' | 'disconnected'
     this.forcedClose = false;
+    this.pingInterval = null;
+    this.latencyHistory = [];
+    this.latestLatency = null;
+    this.medianLatency = null;
   }
 
   connect(customUrl) {
@@ -61,11 +66,34 @@ class WebSocketClient {
           type: 'register',
           role: 'dashboard'
         });
+
+        // Start periodic latency ping
+        this._startPingLoop();
       };
 
       this.ws.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
+
+          // Latency ping response handler
+          if (message.type === 'pong') {
+            const rtt = Math.max(1, Date.now() - (message.t || Date.now()));
+            this.latencyHistory.push(rtt);
+            if (this.latencyHistory.length > 10) this.latencyHistory.shift();
+            const sorted = [...this.latencyHistory].sort((a, b) => a - b);
+            const medianRtt = sorted[Math.floor(sorted.length / 2)];
+            this.latestLatency = rtt;
+            this.medianLatency = medianRtt;
+            this._dispatch({
+              type: 'latency_update',
+              rtt,
+              medianRtt,
+              rating: medianRtt <= 100 ? '10/10' : medianRtt <= 250 ? '8/10' : medianRtt <= 500 ? '6/10' : '3/10',
+              timestamp: Date.now()
+            });
+            return;
+          }
+
           this._dispatch(message);
         } catch (err) {
           console.warn('[WS-Client] Malformed packet received:', event.data);
@@ -73,6 +101,7 @@ class WebSocketClient {
       };
 
       this.ws.onclose = () => {
+        this._stopPingLoop();
         this._setStatus('disconnected');
         this.ws = null;
         if (!this.forcedClose) {
@@ -85,8 +114,28 @@ class WebSocketClient {
       };
     } catch (err) {
       console.error('[WS-Client] Initialization error:', err);
+      this._stopPingLoop();
       this._setStatus('disconnected');
       this._scheduleReconnect();
+    }
+  }
+
+  _startPingLoop() {
+    this._stopPingLoop();
+    // Ping every 1500ms
+    this.pingInterval = setInterval(() => {
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.send({ type: 'ping', t: Date.now() });
+      }
+    }, 1500);
+    // Send immediate ping
+    this.send({ type: 'ping', t: Date.now() });
+  }
+
+  _stopPingLoop() {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
     }
   }
 
@@ -170,6 +219,7 @@ class WebSocketClient {
 
   disconnect() {
     this.forcedClose = true;
+    this._stopPingLoop();
     if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
     if (this.ws) {
       this.ws.close();
@@ -186,6 +236,7 @@ class WebSocketClient {
     this.url = newUrl;
     this.forcedClose = false;
     this.reconnectAttempts = 0;
+    this._stopPingLoop();
     if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
     if (this.ws) {
       try {
