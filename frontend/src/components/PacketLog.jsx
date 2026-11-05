@@ -1,88 +1,115 @@
-import React, { useState } from 'react';
-import { Terminal, Trash2, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Terminal, Trash2, Copy, Check, Radio } from 'lucide-react';
+import { soundManager } from '../utils/soundEffects';
 
-export default function PacketLog({ logs = [], onClear }) {
-  const [isExpanded, setIsExpanded] = useState(true);
+export default function PacketLog({ logs = [], onClear, theme = 'light' }) {
   const [copied, setCopied] = useState(false);
+  const logContainerRef = useRef(null);
+  const isDark = theme === 'dark';
+
+  // Auto-scroll to bottom on new log entry
+  useEffect(() => {
+    if (logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  }, [logs]);
 
   const handleCopy = () => {
-    const text = logs.map(l => `[${l.time}] ${JSON.stringify(l.data)}`).join('\n');
+    const text = logs.map(l => `[${l.time}] ${l.type ? l.type + ' > ' : ''}${typeof l.data === 'string' ? l.data : JSON.stringify(l.data)}`).join('\n');
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
+      soundManager.playChirp();
       setTimeout(() => setCopied(false), 2000);
     });
   };
 
   return (
-    <div className="rounded-2xl bg-[#0f1624] border border-[#162338] overflow-hidden shadow-xl hover:border-[#00c2cb]/30 transition-colors">
-      
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3.5 bg-[#0a0f18]/95 border-b border-[#162338]">
-        <div className="flex items-center space-x-2.5">
-          <div className="p-1.5 rounded-lg bg-[#00c2cb]/10 border border-[#00c2cb]/30 text-[#00c2cb]">
-            <Terminal className="w-4 h-4" />
-          </div>
-          <div>
-            <h3 className="text-xs font-bold font-tech tracking-wider text-white uppercase flex items-center gap-2">
-              <span>LIVE SENSOR TELEMETRY BUS (JSON FRAMES)</span>
-              <span className="text-[10px] font-mono text-[#00c2cb] px-1.5 py-0.2 bg-[#00c2cb]/10 rounded border border-[#00c2cb]/30">
-                #URRT
-              </span>
-            </h3>
-          </div>
+    <div className={`rounded-xl border flex flex-col overflow-hidden transition-all ${
+      isDark ? 'bg-[#0a0f18] border-[#162338]' : 'bg-white border-slate-200 shadow-xs'
+    }`}>
+      {/* Terminal Title Bar */}
+      <div className={`flex items-center justify-between px-3 py-1.5 border-b font-mono text-xs ${
+        isDark ? 'bg-[#06090e] border-[#162338]' : 'bg-slate-100 border-slate-200'
+      }`}>
+        <div className="flex items-center gap-1.5">
+          <Terminal className="w-3.5 h-3.5 text-[#00a8b5]" />
+          <span className={`font-bold tracking-wider text-[11px] ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+            SERIAL MONITOR • TELEMETRY BUS
+          </span>
+          <span className="flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            LIVE
+          </span>
         </div>
 
-        <div className="flex items-center space-x-2 text-xs font-mono">
+        <div className="flex items-center gap-1.5 text-[10px]">
+          <span className="text-slate-400 hidden sm:inline">
+            {logs.length} FRAMES
+          </span>
+
           <button
             onClick={handleCopy}
             disabled={logs.length === 0}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#06090e] hover:bg-slate-800 text-slate-300 border border-[#162338] disabled:opacity-40 transition-colors"
-            title="Copy logs"
+            className={`flex items-center gap-1 px-2 py-0.5 rounded border transition-colors cursor-pointer disabled:opacity-40 ${
+              isDark ? 'bg-[#0f1624] border-[#162338] text-slate-300 hover:text-white' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+            }`}
+            title="Copy all telemetry logs"
           >
-            {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-            <span className="hidden sm:inline">{copied ? 'COPIED' : 'COPY'}</span>
+            {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+            <span>{copied ? 'COPIED' : 'COPY'}</span>
           </button>
 
           <button
-            onClick={onClear}
+            onClick={() => {
+              soundManager.playChirp();
+              onClear();
+            }}
             disabled={logs.length === 0}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#06090e] hover:bg-slate-800 text-slate-300 border border-[#162338] disabled:opacity-40 transition-colors"
-            title="Clear logs"
+            className={`flex items-center gap-1 px-2 py-0.5 rounded border transition-colors cursor-pointer disabled:opacity-40 ${
+              isDark ? 'bg-[#0f1624] border-[#162338] text-slate-300 hover:text-rose-400' : 'bg-white border-slate-300 text-slate-700 hover:text-rose-600 hover:bg-slate-50'
+            }`}
+            title="Clear serial buffer"
           >
             <Trash2 className="w-3 h-3" />
-            <span className="hidden sm:inline">CLEAR</span>
-          </button>
-
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="p-1 rounded-lg bg-[#06090e] hover:bg-slate-800 text-slate-300 border border-[#162338] transition-colors"
-          >
-            {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            <span>CLEAR</span>
           </button>
         </div>
       </div>
 
-      {/* Log Output Body */}
-      {isExpanded && (
-        <div className="p-4 bg-black/95 font-mono text-[11px] h-48 overflow-y-auto space-y-1.5 scrollbar-thin">
-          {logs.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-slate-600">
-              No JSON frames recorded on bus yet.
-            </div>
-          ) : (
-            logs.map((log, index) => (
-              <div key={index} className="flex items-start gap-2 hover:bg-white/5 py-0.5 px-1.5 rounded transition-colors">
-                <span className="text-slate-500 select-none shrink-0">[{log.time}]</span>
-                <span className="text-[#00c2cb] shrink-0 font-semibold">RX &gt;</span>
-                <span className="text-emerald-300 break-all">
+      {/* Terminal Screen (Console output) */}
+      <div 
+        ref={logContainerRef}
+        className="p-2 bg-[#05080e] font-mono text-[10px] leading-relaxed h-28 sm:h-32 overflow-y-auto space-y-1 select-text scrollbar-thin"
+      >
+        {logs.length === 0 ? (
+          <div className="h-full flex items-center justify-center text-slate-600">
+            Ready. Waiting for incoming telemetry frames on bus...
+          </div>
+        ) : (
+          logs.map((log, index) => {
+            const isRx = log.type === 'RX';
+            const isTx = log.type === 'TX';
+            const isAlert = log.type === 'ALERT';
+            const isSys = log.type === 'SYS';
+
+            return (
+              <div key={index} className="flex items-start gap-1.5 hover:bg-white/5 py-0.2 px-1 rounded transition-colors">
+                <span className="text-slate-500 select-none shrink-0 font-mono">[{log.time}]</span>
+                <span className={`shrink-0 font-bold select-none ${
+                  isRx ? 'text-[#00c2cb]' : isTx ? 'text-amber-400' : isAlert ? 'text-rose-400' : 'text-purple-400'
+                }`}>
+                  {log.type ? `${log.type} >` : 'RX >'}
+                </span>
+                <span className={`break-all ${
+                  isAlert ? 'text-rose-300 font-bold' : isTx ? 'text-amber-300' : isSys ? 'text-purple-300' : 'text-emerald-300'
+                }`}>
                   {typeof log.data === 'string' ? log.data : JSON.stringify(log.data)}
                 </span>
               </div>
-            ))
-          )}
-        </div>
-      )}
-
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }

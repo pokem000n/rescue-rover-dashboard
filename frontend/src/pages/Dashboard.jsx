@@ -5,23 +5,31 @@ import ControlModePanel from '../components/ControlModePanel';
 import DriveControl from '../components/DriveControl';
 import SensorTasksPanel from '../components/SensorTasksPanel';
 
-import { 
-  Battery, 
-  Thermometer, 
-  Droplets,
-  ShieldCheck,
-  AlertTriangle,
-  AlertOctagon
-} from 'lucide-react';
+import PacketLog from '../components/PacketLog';
+import { Battery } from 'lucide-react';
 
 import { wsClient } from '../services/websocket';
-import { mockSimulator } from '../services/mockData';
 import { soundManager } from '../utils/soundEffects';
 
 export default function Dashboard({ onNavigateToCamera }) {
-  // Telemetry state
-  const [temperature, setTemperature] = useState(null);
-  const [humidity, setHumidity] = useState(null);
+  // Live Serial Monitor / Telemetry Bus Logs
+  const [logs, setLogs] = useState(() => [
+    { time: new Date().toLocaleTimeString(), type: 'SYS', data: 'Rescue Rover telemetry bus online.' },
+    { time: new Date().toLocaleTimeString(), type: 'SYS', data: 'Table 7 active: Sonar 80-120mm | QR/Ping | Color/Shape | Motion | Audio' }
+  ]);
+
+  const appendLog = useCallback((type, data) => {
+    const time = new Date().toLocaleTimeString();
+    setLogs(prev => {
+      const updated = [...prev, { time, type, data }];
+      return updated.length > 80 ? updated.slice(-80) : updated;
+    });
+  }, []);
+
+  const handleClearLogs = useCallback(() => {
+    setLogs([]);
+  }, []);
+
   const [lastUpdated, setLastUpdated] = useState(null);
 
   // Hardware & Network state
@@ -126,11 +134,6 @@ export default function Dashboard({ onNavigateToCamera }) {
   // Ingests incoming telemetry data point
   const ingestSensorData = useCallback((data) => {
     const now = Date.now();
-    const temp = typeof data.temperature === 'number' ? data.temperature : parseFloat(data.temperature);
-    const hum = typeof data.humidity === 'number' ? data.humidity : parseFloat(data.humidity);
-
-    if (!isNaN(temp)) setTemperature(temp);
-    if (!isNaN(hum)) setHumidity(hum);
     setLastUpdated(data.timestamp || now);
     setEsp32Online(true);
     setPacketCount(c => c + 1);
@@ -155,25 +158,29 @@ export default function Dashboard({ onNavigateToCamera }) {
 
     const unsubStatus = wsClient.onStatusChange((status) => {
       setWsStatus(status);
+      appendLog('SYS', `WebSocket: ${status.toUpperCase()}`);
     });
 
     const unsubInitial = wsClient.on('initial_state', (payload) => {
       if (payload.esp32) {
         setEsp32Online(Boolean(payload.esp32.online));
-        if (payload.esp32.data && payload.esp32.data.temperature !== null) {
+        if (payload.esp32.data) {
           ingestSensorData(payload.esp32.data);
+          appendLog('RX', payload.esp32.data);
         }
       }
     });
 
     const unsubSensor = wsClient.on('sensor_update', (payload) => {
       ingestSensorData(payload);
+      appendLog('RX', payload);
     });
 
     const unsubDeviceStatus = wsClient.on('device_status', (payload) => {
       if (payload.device === 'esp32') {
         const isOnline = payload.status === 'online';
         setEsp32Online(isOnline);
+        appendLog('SYS', `ESP32 Status: ${payload.status.toUpperCase()}`);
         if (!isOnline) {
           soundManager.playHazardAlarm();
         }
@@ -182,12 +189,14 @@ export default function Dashboard({ onNavigateToCamera }) {
 
     const unsubMode = wsClient.on('mode_change', (payload) => {
       setMode(payload.mode || 'teleop');
+      appendLog('SYS', `Mode switched to: ${payload.mode ? payload.mode.toUpperCase() : 'TELEOP'}`);
     });
 
     const unsubEstop = wsClient.on('estop', () => {
       setMode('teleop');
       setEStopFlash(true);
       soundManager.playHazardAlarm();
+      appendLog('ALERT', '🚨 EMERGENCY STOP ACTIVATED');
       setTimeout(() => setEStopFlash(false), 2000);
     });
 
@@ -202,6 +211,7 @@ export default function Dashboard({ onNavigateToCamera }) {
         ping: payload,
         qrIp: payload.ip || prev.qrIp
       }));
+      appendLog('RX', `Ping response from ${payload.ip}: ${payload.rtt_ms}ms`);
     });
 
     return () => {
@@ -214,7 +224,7 @@ export default function Dashboard({ onNavigateToCamera }) {
       unsubLatency();
       unsubPingResult();
     };
-  }, [ingestSensorData]);
+  }, [ingestSensorData, appendLog]);
 
   // Keyboard Shortcuts: Key E for E-Stop
   useEffect(() => {
@@ -235,6 +245,7 @@ export default function Dashboard({ onNavigateToCamera }) {
   const handleModeChange = (newMode) => {
     soundManager.playChirp();
     setMode(newMode);
+    appendLog('SYS', `Control Mode: ${newMode.toUpperCase()} (${newMode === 'autonomous' ? '×4' : '×1'})`);
     wsClient.send({ type: 'mode_change', mode: newMode });
     fetch('/api/mode', {
       method: 'POST',
@@ -247,21 +258,24 @@ export default function Dashboard({ onNavigateToCamera }) {
   const handleDrive = useCallback((direction, speed = 180) => {
     if (mode === 'autonomous') {
       soundManager.playHazardAlarm();
+      appendLog('ALERT', 'Drive rejected: Autonomous lock active');
       return;
     }
+    appendLog('TX', { drive: direction, speed });
     wsClient.send({ type: 'drive_command', direction, speed });
     fetch('/api/drive', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ direction, speed })
     }).catch(() => {});
-  }, [mode]);
+  }, [mode, appendLog]);
 
   // E-Stop handler
   const handleEStop = () => {
     soundManager.playHazardAlarm();
     setMode('teleop');
     setEStopFlash(true);
+    appendLog('ALERT', '🚨 E-STOP TRIGGERED BY OPERATOR');
     wsClient.send({ type: 'estop' });
     fetch('/api/estop', { method: 'POST' }).catch(() => {});
     setTimeout(() => setEStopFlash(false), 2000);
@@ -270,6 +284,7 @@ export default function Dashboard({ onNavigateToCamera }) {
   // QR and Ping Handler
   const handleSendPing = async (ip) => {
     try {
+      appendLog('TX', `Ping dispatch to IPv4: ${ip}`);
       wsClient.send({ type: 'ping_request', ip });
       const res = await fetch('/api/ping', {
         method: 'POST',
@@ -283,6 +298,7 @@ export default function Dashboard({ onNavigateToCamera }) {
         ping: data,
         timestamp: Date.now()
       }));
+      appendLog('RX', `Ping response from ${ip}: ${data.rtt_ms || 12}ms`);
       return data;
     } catch (e) {
       const mockResult = { success: true, ip, rtt_ms: 16, timestamp: Date.now() };
@@ -292,6 +308,7 @@ export default function Dashboard({ onNavigateToCamera }) {
         ping: mockResult,
         timestamp: Date.now()
       }));
+      appendLog('RX', `Ping fallback: 16ms`);
       return mockResult;
     }
   };
@@ -306,6 +323,7 @@ export default function Dashboard({ onNavigateToCamera }) {
         timestamp
       };
     });
+    appendLog('RX', `QR Decoded: ${ip || text}`);
     if (ip) {
       handleSendPing(ip);
     }
@@ -322,6 +340,7 @@ export default function Dashboard({ onNavigateToCamera }) {
         timestamp
       };
     });
+    appendLog('RX', `Vision: ${color} ${shape}`);
   };
 
   const isDark = theme === 'dark';
@@ -358,8 +377,6 @@ export default function Dashboard({ onNavigateToCamera }) {
           <div className="flex-1 min-h-0 overflow-hidden rounded-xl border border-slate-200 dark:border-[#162338]">
             <CameraFeed 
               isDemoMode={false}
-              temperature={temperature}
-              humidity={humidity}
               triggerSnapshot={triggerSnapshot}
               onSnapshotsCountChange={setSnapshotsCount}
               theme={theme}
@@ -380,8 +397,8 @@ export default function Dashboard({ onNavigateToCamera }) {
 
         </div>
 
-        {/* Right Column (5 Cols): Cockpit, Drive & Telemetry */}
-        <div className="lg:col-span-5 flex flex-col gap-2.5 h-full overflow-hidden justify-between">
+        {/* Right Column (5 Cols): Mode, Drive, Serial Monitor & Status */}
+        <div className="lg:col-span-5 flex flex-col gap-2.5 h-full overflow-hidden">
           
           {/* 1. Control Mode Selector (Teleop ×1 vs Autonomous ×4) */}
           <div className="flex-shrink-0">
@@ -393,7 +410,7 @@ export default function Dashboard({ onNavigateToCamera }) {
           </div>
 
           {/* 2. Responsive Drive Controller (WASD + D-Pad + Speed Slider) */}
-          <div className="flex-1 flex flex-col justify-center min-h-0">
+          <div className="flex-shrink-0">
             <DriveControl 
               mode={mode}
               onDrive={handleDrive}
@@ -401,67 +418,41 @@ export default function Dashboard({ onNavigateToCamera }) {
             />
           </div>
 
-          {/* 3. Live Telemetry Strip */}
-          <div className="flex-shrink-0 grid grid-cols-3 gap-2">
-            
-            {/* Battery */}
-            <div className={`p-2 rounded-xl border flex flex-col justify-between ${
-              isDark ? 'bg-[#0a0f18] border-[#162338]' : 'bg-white border-slate-200 shadow-xs'
-            }`}>
-              <span className="text-[10px] font-mono text-slate-400">BATTERY</span>
-              <div className="flex items-center gap-1.5 my-0.5">
-                <Battery className="w-4 h-4 text-emerald-500" />
-                <span className="text-base font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                  {battery !== null ? `${battery}%` : '96%'}
-                </span>
-              </div>
-              <div className="h-1.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
-                <div 
-                  className="h-full bg-emerald-500 rounded-full"
-                  style={{ width: `${battery !== null ? battery : 96}%` }}
-                />
-              </div>
-            </div>
-
-            {/* Ambient Temperature */}
-            <div className={`p-2 rounded-xl border flex flex-col justify-between ${
-              isDark ? 'bg-[#0a0f18] border-[#162338]' : 'bg-white border-slate-200 shadow-xs'
-            }`}>
-              <span className="text-[10px] font-mono text-slate-400">TEMPERATURE</span>
-              <div className="flex items-center gap-1.5 my-0.5">
-                <Thermometer className="w-4 h-4 text-amber-500" />
-                <span className="text-base font-mono font-bold text-slate-800 dark:text-slate-100">
-                  {temperature !== null ? `${temperature.toFixed(1)}°C` : '28.4°C'}
-                </span>
-              </div>
-              <span className="text-[9px] font-mono text-slate-400 truncate">DHT Sensor Live</span>
-            </div>
-
-            {/* Humidity */}
-            <div className={`p-2 rounded-xl border flex flex-col justify-between ${
-              isDark ? 'bg-[#0a0f18] border-[#162338]' : 'bg-white border-slate-200 shadow-xs'
-            }`}>
-              <span className="text-[10px] font-mono text-slate-400">HUMIDITY</span>
-              <div className="flex items-center gap-1.5 my-0.5">
-                <Droplets className="w-4 h-4 text-cyan-500" />
-                <span className="text-base font-mono font-bold text-slate-800 dark:text-slate-100">
-                  {humidity !== null ? `${humidity.toFixed(0)}%` : '46%'}
-                </span>
-              </div>
-              <span className="text-[9px] font-mono text-slate-400 truncate">Nominal</span>
-            </div>
-
+          {/* 3. Live Serial Monitor • Telemetry Bus Console */}
+          <div className="flex-1 min-h-[140px] overflow-hidden">
+            <PacketLog 
+              logs={logs}
+              onClear={handleClearLogs}
+              theme={theme}
+            />
           </div>
 
-          {/* 4. Link & Health Bar */}
+          {/* 4. Compact Status & Health Bar */}
           <div className={`py-1.5 px-3 rounded-lg border flex items-center justify-between text-[10px] font-mono flex-shrink-0 ${
             isDark ? 'bg-[#06090e] border-[#162338] text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-600'
           }`}>
-            <div className="flex items-center gap-1.5">
-              <span className={`w-2 h-2 rounded-full ${esp32Online ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-              <span>Link: {wsStatus.toUpperCase()} ({wsClient.url})</span>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <Battery className="w-3.5 h-3.5 text-emerald-500" />
+                <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                  {battery !== null ? `${battery}%` : '96%'}
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-slate-400">MODE:</span>
+                <span className={`font-bold ${mode === 'autonomous' ? 'text-violet-500' : 'text-blue-500'}`}>
+                  {mode.toUpperCase()}
+                </span>
+              </div>
             </div>
-            <span className="text-[#00a8b5] font-bold">URRT V1.3 COCKPIT ACTIVE</span>
+
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                <span className={`w-2 h-2 rounded-full ${esp32Online ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                <span>ESP32: {esp32Online ? 'ONLINE' : 'STANDBY'}</span>
+              </div>
+              <span className="text-[#00a8b5] font-bold">URRT V1.3</span>
+            </div>
           </div>
 
         </div>

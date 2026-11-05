@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { QrCode, Eye, Activity, Mic, CheckCircle, XCircle, Target } from 'lucide-react';
+import { QrCode, Eye, Activity, Mic, CheckCircle, Target, Clock } from 'lucide-react';
 import { soundManager } from '../utils/soundEffects';
 
 export default function SensorTasksPanel({ sensors = {}, mode = 'teleop', onSendPing, theme = 'light' }) {
@@ -9,6 +9,7 @@ export default function SensorTasksPanel({ sensors = {}, mode = 'teleop', onSend
   const [qrIp, setQrIp] = useState(sensors?.qrIp || '');
   const [pingStatus, setPingStatus] = useState('idle'); // idle | pinging | success | failed
   const [pingMs, setPingMs] = useState(null);
+  const [lastPingTime, setLastPingTime] = useState(null);
 
   // Sync incoming QR IP from camera detection
   useEffect(() => {
@@ -22,18 +23,19 @@ export default function SensorTasksPanel({ sensors = {}, mode = 'teleop', onSend
       } else {
         setPingStatus('failed');
       }
+      setLastPingTime(sensors.ping.timestamp || Date.now());
     }
   }, [sensors?.qrIp, sensors?.ping]);
 
-  // Sonar state
-  const sonar = sensors?.sonar !== null && sensors?.sonar !== undefined ? Number(sensors.sonar) : 98; // demo default 98mm
+  // Sonar state (80-120mm target zone)
+  const sonar = sensors?.sonar !== null && sensors?.sonar !== undefined ? Number(sensors.sonar) : 98;
   const sonarInRange = sonar !== null && sonar >= 80 && sonar <= 120;
 
   // Color & Shape
   const detectedColor = sensors?.color || 'Red';
   const detectedShape = sensors?.shape || 'Circle';
 
-  // Motion tracking
+  // Motion tracking (5s continuous)
   const [trackCountdown, setTrackCountdown] = useState(5);
   const [trackStatus, setTrackStatus] = useState('idle'); // idle | tracking | success
   const trackInterval = useRef(null);
@@ -41,6 +43,8 @@ export default function SensorTasksPanel({ sensors = {}, mode = 'teleop', onSend
   // Two-way audio
   const [codeWord, setCodeWord] = useState('');
   const [audioStatus, setAudioStatus] = useState('idle');
+
+  const nowTime = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
   const handlePing = async () => {
     if (!qrIp) return;
@@ -54,6 +58,7 @@ export default function SensorTasksPanel({ sensors = {}, mode = 'teleop', onSend
         if (result?.success) {
           setPingStatus('success');
           setPingMs(result.rtt_ms || 16);
+          setLastPingTime(Date.now());
         } else {
           setPingStatus('failed');
         }
@@ -64,6 +69,7 @@ export default function SensorTasksPanel({ sensors = {}, mode = 'teleop', onSend
       setTimeout(() => {
         setPingStatus('success');
         setPingMs(18);
+        setLastPingTime(Date.now());
       }, 500);
     }
   };
@@ -101,17 +107,18 @@ export default function SensorTasksPanel({ sensors = {}, mode = 'teleop', onSend
     <div className={`rounded-xl border p-2.5 transition-all ${
       isDark ? 'bg-[#0a0f18] border-[#162338]' : 'bg-white border-slate-200 shadow-xs'
     }`}>
-      {/* Title Bar */}
+      {/* Title Bar matching Rulebook Table 7 */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-1.5">
           <Eye className="w-3.5 h-3.5 text-[#00a8b5]" />
           <h3 className={`text-xs font-mono font-bold tracking-wider ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
-            SENSOR CRATE TASKS (RULEBOOK TABLE 7)
+            ALL SENSORS MONITORING (TABLE 7: 15 MARKS)
           </h3>
         </div>
-        <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">
-          15 MARKS
-        </span>
+        <div className="flex items-center gap-1 text-[10px] font-mono text-slate-400">
+          <Clock className="w-3 h-3" />
+          <span>TIMESTAMP: {nowTime}</span>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
@@ -121,8 +128,8 @@ export default function SensorTasksPanel({ sensors = {}, mode = 'teleop', onSend
           pingStatus === 'success' ? 'border-emerald-500/50 bg-emerald-50/50 dark:bg-emerald-500/10' : isDark ? 'border-[#162338] bg-[#06090e]' : 'border-slate-200 bg-slate-50'
         }`}>
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-mono font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1">
-              <QrCode className="w-3 h-3 text-[#00a8b5]" /> QR PING
+            <span className="text-[10px] font-mono font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1">
+              <QrCode className="w-3 h-3 text-[#00a8b5]" /> QR & PING
             </span>
             {pingStatus === 'success' && <CheckCircle className="w-3 h-3 text-emerald-500" />}
           </div>
@@ -131,7 +138,7 @@ export default function SensorTasksPanel({ sensors = {}, mode = 'teleop', onSend
               type="text"
               value={qrIp}
               onChange={e => setQrIp(e.target.value)}
-              placeholder="192.168.1.1"
+              placeholder="Referee IP"
               className={`flex-1 px-1.5 py-0.5 rounded text-[10px] font-mono border outline-none ${
                 isDark ? 'bg-[#0f1624] border-[#162338] text-white' : 'bg-white border-slate-300 text-slate-900'
               }`}
@@ -145,19 +152,19 @@ export default function SensorTasksPanel({ sensors = {}, mode = 'teleop', onSend
             </button>
           </div>
           <div className="text-[9px] font-mono font-bold text-emerald-600 dark:text-emerald-400 truncate">
-            {pingStatus === 'success' ? `Echo OK (${pingMs}ms)` : pingStatus === 'failed' ? 'Failed' : 'Awaiting QR'}
+            {pingStatus === 'success' ? `Echo OK (${pingMs}ms)` : pingStatus === 'failed' ? 'Timeout' : 'Auto-Scanned IP'}
           </div>
         </div>
 
-        {/* 2. Sonar (80-120mm) */}
+        {/* 2. Sonar Proximity (80-120mm) */}
         <div className={`p-2 rounded-lg border flex flex-col justify-between ${
           sonarInRange ? 'border-emerald-500/50 bg-emerald-50/50 dark:bg-emerald-500/10' : isDark ? 'border-[#162338] bg-[#06090e]' : 'border-slate-200 bg-slate-50'
         }`}>
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-mono font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1">
-              <Target className="w-3 h-3 text-[#00a8b5]" /> SONAR
+            <span className="text-[10px] font-mono font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1">
+              <Target className="w-3 h-3 text-[#00a8b5]" /> SONAR PROXIMITY
             </span>
-            {sonarInRange && <span className="text-[9px] font-mono font-bold text-emerald-600 dark:text-emerald-400">TARGET</span>}
+            {sonarInRange && <span className="text-[9px] font-mono font-bold text-emerald-600 dark:text-emerald-400">IN TARGET</span>}
           </div>
           <div className="text-center my-0.5">
             <span className={`text-base font-mono font-bold ${sonarInRange ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-200'}`}>
@@ -165,7 +172,7 @@ export default function SensorTasksPanel({ sensors = {}, mode = 'teleop', onSend
             </span>
           </div>
           <div className="text-[9px] font-mono text-slate-500 text-center">
-            Zone: 80–120mm
+            Stop Target: 80–120mm
           </div>
         </div>
 
@@ -174,8 +181,8 @@ export default function SensorTasksPanel({ sensors = {}, mode = 'teleop', onSend
           detectedColor && detectedShape ? 'border-emerald-500/50 bg-emerald-50/50 dark:bg-emerald-500/10' : isDark ? 'border-[#162338] bg-[#06090e]' : 'border-slate-200 bg-slate-50'
         }`}>
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-mono font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1">
-              <Eye className="w-3 h-3 text-[#00a8b5]" /> COLOR & SHAPE
+            <span className="text-[10px] font-mono font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1">
+              <Eye className="w-3 h-3 text-[#00a8b5]" /> COLOUR & SHAPE
             </span>
             <CheckCircle className="w-3 h-3 text-emerald-500" />
           </div>
@@ -198,8 +205,8 @@ export default function SensorTasksPanel({ sensors = {}, mode = 'teleop', onSend
           trackStatus === 'success' ? 'border-emerald-500/50 bg-emerald-50/50 dark:bg-emerald-500/10' : isDark ? 'border-[#162338] bg-[#06090e]' : 'border-slate-200 bg-slate-50'
         }`}>
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-mono font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1">
-              <Activity className="w-3 h-3 text-[#00a8b5]" /> MOTION (5S)
+            <span className="text-[10px] font-mono font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1">
+              <Activity className="w-3 h-3 text-[#00a8b5]" /> MOTION TRACKING
             </span>
             {trackStatus === 'success' && <CheckCircle className="w-3 h-3 text-emerald-500" />}
           </div>
@@ -207,7 +214,7 @@ export default function SensorTasksPanel({ sensors = {}, mode = 'teleop', onSend
             <span className={`text-base font-mono font-bold ${
               trackStatus === 'tracking' ? 'text-amber-500 animate-pulse' : trackStatus === 'success' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-200'
             }`}>
-              {trackStatus === 'tracking' ? `${trackCountdown}s` : trackStatus === 'success' ? '5.0s ✓' : '5.0s'}
+              {trackStatus === 'tracking' ? `${trackCountdown}s` : trackStatus === 'success' ? '5.0s PASS' : '5.0s'}
             </span>
           </div>
           <button
@@ -219,13 +226,13 @@ export default function SensorTasksPanel({ sensors = {}, mode = 'teleop', onSend
           </button>
         </div>
 
-        {/* 5. Two-Way Audio */}
+        {/* 5. Two-Way Audio Acuity */}
         <div className={`p-2 rounded-lg border flex flex-col justify-between ${
           audioStatus === 'success' ? 'border-emerald-500/50 bg-emerald-50/50 dark:bg-emerald-500/10' : isDark ? 'border-[#162338] bg-[#06090e]' : 'border-slate-200 bg-slate-50'
         }`}>
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-mono font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1">
-              <Mic className="w-3 h-3 text-[#00a8b5]" /> AUDIO CODE
+            <span className="text-[10px] font-mono font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1">
+              <Mic className="w-3 h-3 text-[#00a8b5]" /> TWO-WAY AUDIO
             </span>
             {audioStatus === 'success' && <CheckCircle className="w-3 h-3 text-emerald-500" />}
           </div>
@@ -254,7 +261,7 @@ export default function SensorTasksPanel({ sensors = {}, mode = 'teleop', onSend
                 disabled={!codeWord}
                 className="w-full py-0.5 rounded bg-[#00c2cb] hover:bg-[#00e5ff] text-black font-mono font-bold text-[9px] cursor-pointer"
               >
-                CONFIRM
+                CONFIRM CODE
               </button>
             </>
           )}

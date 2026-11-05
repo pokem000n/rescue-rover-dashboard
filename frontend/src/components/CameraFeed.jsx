@@ -584,13 +584,11 @@ export default function CameraFeed({
     ctx.font = 'bold 22px sans-serif';
     ctx.fillText(`UIU RESCUE ROVER TEAM (#URRT) • ${camTag}`, 24, h - 24);
 
-    const tempStr = temperature !== null && temperature !== undefined ? `${temperature}°C` : '--';
-    const humStr = humidity !== null && humidity !== undefined ? `${humidity}%` : '--';
     const timeStr = new Date().toLocaleString();
 
     ctx.fillStyle = '#f1f5f9';
     ctx.font = '15px monospace';
-    ctx.fillText(`TEMP: ${tempStr} | HUM: ${humStr} | ${timeStr}`, w - 480, h - 24);
+    ctx.fillText(`STATUS: NOMINAL | ${timeStr}`, w - 360, h - 24);
 
     const dataUrl = canvas.toDataURL('image/png');
     const snapshotItem = {
@@ -1353,9 +1351,9 @@ export default function CameraFeed({
               </div>
             )}
 
-            {/* Live Telemetry Pill */}
-            <div className="absolute top-2 left-2 bg-black/85 px-2 py-0.5 rounded text-[10px] text-[#00c2cb] border border-[#00c2cb]/40 pointer-events-none">
-              {temperature !== null ? `${temperature}°C` : '--'} | {humidity !== null ? `${humidity}%` : '--'}
+            {/* Live Status Pill */}
+            <div className="absolute top-2 left-2 bg-black/85 px-2 py-0.5 rounded text-[10px] text-[#00c2cb] border border-[#00c2cb]/40 pointer-events-none font-mono">
+              TARGET ZONE: 80–120mm | QR & AI ACTIVE
             </div>
 
             {/* Floating Quick Action Controls */}

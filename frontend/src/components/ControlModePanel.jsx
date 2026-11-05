@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Radio, Bot, ShieldAlert, Lock, Unlock } from 'lucide-react';
+import { Radio, Bot, Lock } from 'lucide-react';
 import { soundManager } from '../utils/soundEffects';
 
 export default function ControlModePanel({ mode, onModeChange, theme }) {
@@ -31,13 +31,13 @@ export default function ControlModePanel({ mode, onModeChange, theme }) {
           <div className="flex items-center gap-1.5">
             <Radio className="w-3.5 h-3.5 text-[#00a8b5]" />
             <h3 className={`text-xs font-mono font-bold tracking-wider ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
-              ROBOT CONTROL MODE
+              CONTROL MODE (TABLE 7: 20 MARKS)
             </h3>
           </div>
           <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
             mode === 'autonomous'
-              ? 'bg-violet-500/20 text-violet-400 border-violet-500/40 animate-pulse'
-              : 'bg-emerald-500/15 text-emerald-600 border-emerald-300'
+              ? 'bg-violet-500/20 text-violet-600 dark:text-violet-300 border-violet-500/40 animate-pulse'
+              : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-300'
           }`}>
             {mode === 'autonomous' ? '×4 MULTIPLIER' : '×1 MULTIPLIER'}
           </span>
@@ -103,7 +103,7 @@ export default function ControlModePanel({ mode, onModeChange, theme }) {
             </div>
 
             <p className="text-xs mb-4 text-slate-600 dark:text-slate-300 leading-relaxed">
-              Declare to referee before starting. In Autonomous mode, <strong>manual drive controls are strictly locked</strong>. Multiplier will be <strong>×4</strong>.
+              Declare to referee before starting. In Autonomous mode, <strong>manual drive controls are strictly locked</strong>. Successful attempt receives <strong>×4 multiplier</strong>.
             </p>
 
             <div className="flex gap-2">
