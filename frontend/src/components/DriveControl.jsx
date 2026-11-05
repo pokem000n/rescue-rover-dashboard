@@ -4,19 +4,19 @@ import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Square, Lock, Gauge } from '
 const DIRECTIONS = [
   { key: 'forward', icon: ArrowUp, label: 'W', pos: 'col-start-2 row-start-1' },
   { key: 'left', icon: ArrowLeft, label: 'A', pos: 'col-start-1 row-start-2' },
-  { key: 'stop', icon: Square, label: 'SPACE', pos: 'col-start-2 row-start-2' },
+  { key: 'stop', icon: Square, label: 'STOP', pos: 'col-start-2 row-start-2' },
   { key: 'right', icon: ArrowRight, label: 'D', pos: 'col-start-3 row-start-2' },
   { key: 'backward', icon: ArrowDown, label: 'S', pos: 'col-start-2 row-start-3' },
 ];
 
 export default function DriveControl({ mode, onDrive, theme }) {
   const locked = mode === 'autonomous';
-  const isDark = theme !== 'light';
+  const isDark = theme === 'dark';
   const activeKeys = useRef(new Set());
   const [activeDir, setActiveDir] = useState(null);
   const [speed, setSpeed] = useState(180); // 120 (slow), 180 (normal), 255 (turbo)
 
-  // Keyboard drive controls
+  // Keyboard drive controls (WASD, Arrows, Space)
   useEffect(() => {
     if (locked) return;
     const keyMap = { 
@@ -75,72 +75,60 @@ export default function DriveControl({ mode, onDrive, theme }) {
   };
 
   return (
-    <div className={`rounded-2xl border p-4 space-y-3.5 transition-all ${
-      isDark ? 'bg-[#0a0f18] border-[#162338]' : 'bg-white border-slate-200 shadow-sm'
+    <div className={`rounded-xl border p-2.5 space-y-2 transition-all ${
+      isDark ? 'bg-[#0a0f18] border-[#162338]' : 'bg-white border-slate-200 shadow-xs'
     }`}>
       {/* Header */}
-      <div className="flex items-center gap-2">
-        <ArrowUp className="w-4 h-4 text-[#00c2cb]" />
-        <h3 className={`text-xs font-mono font-bold tracking-widest ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-          DRIVE COCKPIT
-        </h3>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <ArrowUp className="w-3.5 h-3.5 text-[#00a8b5]" />
+          <h3 className={`text-xs font-mono font-bold tracking-wider ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+            DRIVE CONTROLS
+          </h3>
+        </div>
         {locked ? (
-          <span className="ml-auto flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/40 animate-pulse">
-            <Lock className="w-2.5 h-2.5" /> AUTO LOCKED (×4)
+          <span className="flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-400 border border-violet-500/40 animate-pulse">
+            <Lock className="w-2.5 h-2.5" /> LOCKED
           </span>
         ) : (
-          <span className="ml-auto text-[10px] font-mono text-emerald-500 font-bold flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-            MANUAL ACTIVE
-          </span>
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] font-mono text-slate-400 mr-1">SPD:</span>
+            {[
+              { label: 'S', val: 120 },
+              { label: 'N', val: 180 },
+              { label: 'F', val: 255 }
+            ].map(s => (
+              <button
+                key={s.val}
+                disabled={locked}
+                onClick={() => setSpeed(s.val)}
+                className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold cursor-pointer transition-all ${
+                  speed === s.val
+                    ? 'bg-[#00c2cb] text-black font-extrabold shadow-xs'
+                    : isDark ? 'bg-[#162338] text-slate-400' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+                title={`Speed: ${s.val} PWM`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
         )}
       </div>
 
-      {/* Speed Selector */}
-      <div className={`flex items-center justify-between p-2 rounded-xl border text-xs font-mono ${
-        isDark ? 'bg-[#06090e] border-[#162338]' : 'bg-slate-50 border-slate-200'
-      }`}>
-        <div className="flex items-center gap-1.5 text-slate-400">
-          <Gauge className="w-3.5 h-3.5 text-[#00c2cb]" />
-          <span>SPEED:</span>
-        </div>
-        <div className="flex gap-1">
-          {[
-            { label: 'SLOW', val: 120 },
-            { label: 'NORM', val: 180 },
-            { label: 'FAST', val: 255 }
-          ].map(s => (
-            <button
-              key={s.val}
-              disabled={locked}
-              onClick={() => setSpeed(s.val)}
-              className={`px-2 py-0.5 rounded-lg text-[10px] font-bold cursor-pointer transition-all ${
-                speed === s.val
-                  ? 'bg-[#00c2cb] text-black shadow-sm'
-                  : isDark
-                  ? 'bg-[#0f1624] text-slate-400 hover:text-white'
-                  : 'bg-slate-200 text-slate-600 hover:text-black'
-              }`}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Controls Container with Lock Overlay */}
+      {/* D-Pad Container with Lock Overlay */}
       <div className={`relative ${locked ? 'opacity-40 pointer-events-none' : ''}`}>
         {locked && (
-          <div className="absolute inset-0 flex items-center justify-center z-20 backdrop-blur-[2px] rounded-xl">
-            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-violet-950/90 border-2 border-violet-500 text-violet-200 text-xs font-mono font-bold shadow-xl shadow-violet-500/30">
-              <Lock className="w-4 h-4 text-violet-300" />
+          <div className="absolute inset-0 flex items-center justify-center z-20 backdrop-blur-xs rounded-xl">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-950/90 border border-violet-500 text-violet-200 text-xs font-mono font-bold shadow-lg">
+              <Lock className="w-3.5 h-3.5 text-violet-400" />
               <span>DRIVE LOCKED (AUTONOMOUS)</span>
             </div>
           </div>
         )}
 
-        {/* D-Pad Buttons */}
-        <div className="grid grid-cols-3 grid-rows-3 gap-2 w-fit mx-auto py-1">
+        {/* Tactile D-Pad Buttons */}
+        <div className="grid grid-cols-3 grid-rows-3 gap-1.5 w-fit mx-auto">
           {DIRECTIONS.map(({ key, icon: Icon, label, pos }) => {
             const isPressed = activeDir === key;
             const isStop = key === 'stop';
@@ -151,23 +139,23 @@ export default function DriveControl({ mode, onDrive, theme }) {
                 onMouseUp={() => handlePressEnd(key)}
                 onTouchStart={(e) => { e.preventDefault(); handlePressStart(key); }}
                 onTouchEnd={() => handlePressEnd(key)}
-                className={`${pos} w-16 h-16 sm:w-16 sm:h-16 flex flex-col items-center justify-center rounded-2xl border-2 transition-all select-none cursor-pointer disabled:opacity-50
+                className={`${pos} w-13 h-12 flex flex-col items-center justify-center rounded-xl border transition-all select-none cursor-pointer disabled:opacity-50
                   ${isStop
                     ? isPressed || isDark
-                      ? 'bg-rose-950/40 border-rose-500/60 text-rose-300 hover:bg-rose-900/60 active:scale-95'
+                      ? 'bg-rose-950/50 border-rose-500 text-rose-300 hover:bg-rose-900 active:scale-95'
                       : 'bg-rose-50 border-rose-300 text-rose-700 hover:bg-rose-100'
                     : isPressed
-                    ? 'bg-[#00c2cb] border-[#00c2cb] text-black scale-95 shadow-lg shadow-cyan-500/40 font-bold'
+                    ? 'bg-[#00c2cb] border-[#00c2cb] text-black scale-95 shadow-md shadow-cyan-500/30 font-bold'
                     : isDark
                     ? 'bg-[#0f1624] border-[#1e2d47] text-slate-200 hover:border-[#00c2cb]/60 hover:text-[#00c2cb] active:scale-95'
-                    : 'bg-slate-100 border-slate-200 text-slate-700 hover:border-[#00c2cb] hover:text-[#00c2cb] active:scale-95 shadow-xs'
+                    : 'bg-slate-100 border-slate-300 text-slate-700 hover:border-[#00c2cb] hover:text-[#00a8b5] active:scale-95 shadow-xs'
                   }
                 `}
                 disabled={locked}
-                title={`Drive ${key.toUpperCase()} (${label})`}
+                title={`Drive ${key.toUpperCase()} (Key: ${label})`}
               >
-                <Icon className={`w-5 h-5 ${isPressed ? 'scale-110' : ''}`} />
-                <span className="text-[9px] font-mono font-bold opacity-70 mt-0.5">{label}</span>
+                <Icon className={`w-4 h-4 ${isPressed ? 'scale-110' : ''}`} />
+                <span className="text-[8px] font-mono font-bold opacity-70">{label}</span>
               </button>
             );
           })}
@@ -175,7 +163,7 @@ export default function DriveControl({ mode, onDrive, theme }) {
       </div>
 
       <div className={`text-center text-[10px] font-mono ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-        Use Keyboard (WASD / Arrows) or Click Buttons
+        WASD Keys or Click D-Pad
       </div>
     </div>
   );

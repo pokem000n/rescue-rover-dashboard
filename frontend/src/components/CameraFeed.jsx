@@ -667,7 +667,7 @@ export default function CameraFeed({
           ? 'bg-white border-slate-200 shadow-slate-200/50'
           : 'bg-[#0f1624] border-[#162338]'
       } ${
-        isFullscreen ? 'fixed inset-0 z-50 rounded-none bg-black' : 'h-full min-h-[420px] lg:min-h-[470px]'
+        isFullscreen ? 'fixed inset-0 z-50 rounded-none bg-black' : 'h-full flex-1 min-h-[220px]'
       }`}
     >
       {/* Top Header & Camera Slot Selector Bar */}
