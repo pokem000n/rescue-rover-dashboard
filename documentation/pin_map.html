@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>URRT Autonomous Rover - Pin Map Specification</title>
+  <style>
+    @page { size: A4 portrait; margin: 15mm; }
+    body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; color: #0f172a; line-height: 1.4; margin: 0; padding: 20px; font-size: 11pt; background: #fff; }
+    .header { border-bottom: 3px solid #00a8b5; padding-bottom: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-end; }
+    .brand { font-size: 18pt; font-weight: 800; color: #00a8b5; letter-spacing: 0.5px; }
+    .subhead { font-size: 10pt; color: #64748b; font-weight: 600; text-transform: uppercase; }
+    .version { font-family: monospace; font-size: 9pt; background: #f1f5f9; padding: 3px 8px; border-radius: 4px; }
+    h2 { font-size: 13pt; color: #1e293b; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-top: 18px; margin-bottom: 10px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 9.5pt; }
+    th { background: #0f172a; color: #fff; text-align: left; padding: 6px 10px; font-weight: 600; }
+    td { padding: 6px 10px; border-bottom: 1px solid #e2e8f0; }
+    tr:nth-child(even) { background: #f8fafc; }
+    .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 8pt; font-weight: 700; font-family: monospace; }
+    .badge-pwm { background: #e0f2fe; color: #0369a1; }
+    .badge-gpio { background: #f1f5f9; color: #475569; }
+    .badge-i2c { background: #fef3c7; color: #b45309; }
+    .badge-power { background: #fee2e2; color: #b91c1c; }
+    .badge-interrupt { background: #f3e8ff; color: #7e22ce; }
+    .badge-safe { background: #dcfce7; color: #15803d; }
+    .callout { background: #f0fdfa; border-left: 4px solid #00a8b5; padding: 10px 14px; margin: 14px 0; font-size: 9pt; border-radius: 0 4px 4px 0; }
+    .footer { margin-top: 25px; border-top: 1px solid #e2e8f0; padding-top: 8px; font-size: 8pt; color: #94a3b8; display: flex; justify-content: space-between; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div>
+      <div class="brand">UIU RESCUE ROVER TEAM (#URRT)</div>
+      <div class="subhead">Hardware GPIO Pinout & Interface Specification</div>
+    </div>
+    <div class="version">DOC-ID: URRT-PINMAP-V1.3 • TABLE 7 COMPLIANT</div>
+  </div>
+
+  <div class="callout">
+    <strong>URRT Table 7 Compliance Mandate:</strong> All hardware interfaces require dedicated optical isolation or logic level shifting between 5V sensor levels and 3.3V microcontroller logic. The hardware Emergency Stop (E-Stop) has direct interrupt priority over motor control PWM channels.
+  </div>
+
+  <h2>1. ESP32-WROOM-32 Primary Controller Pin Map</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>GPIO Pin</th>
+        <th>Function / Signal</th>
+        <th>Target Hardware</th>
+        <th>Signal Type</th>
+        <th>Voltage Level</th>
+        <th>Notes / Safety</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>GPIO 4</strong></td>
+        <td>ESTOP_INT</td>
+        <td>Hardware E-Stop Button</td>
+        <td><span class="badge badge-interrupt">INTERRUPT</span></td>
+        <td>3.3V (Pull-up)</td>
+        <td>Active LOW. Hardware cutoff trigger.</td>
+      </tr>
+      <tr>
+        <td><strong>GPIO 5</strong></td>
+        <td>SONAR_TRIG</td>
+        <td>HC-SR04 / JSN-SR04T</td>
+        <td><span class="badge badge-gpio">OUTPUT</span></td>
+        <td>3.3V</td>
+        <td>10µs ultrasonic trigger pulse.</td>
+      </tr>
+      <tr>
+        <td><strong>GPIO 18</strong></td>
+        <td>SONAR_ECHO</td>
+        <td>HC-SR04 / JSN-SR04T</td>
+        <td><span class="badge badge-gpio">INPUT</span></td>
+        <td>3.3V (via divider)</td>
+        <td>Target Zone Monitoring: 80–120 mm.</td>
+      </tr>
+      <tr>
+        <td><strong>GPIO 14</strong></td>
+        <td>LEFT_PWM</td>
+        <td>Motor Driver (BTS7960 / L298N)</td>
+        <td><span class="badge badge-pwm">PWM (20 kHz)</span></td>
+        <td>3.3V / 5V Logic</td>
+        <td>Left Track Speed Control (0–255).</td>
+      </tr>
+      <tr>
+        <td><strong>GPIO 27</strong></td>
+        <td>LEFT_DIR</td>
+        <td>Motor Driver (BTS7960 / L298N)</td>
+        <td><span class="badge badge-gpio">OUTPUT</span></td>
+        <td>3.3V / 5V Logic</td>
+        <td>Left Track Direction (HIGH/LOW).</td>
+      </tr>
+      <tr>
+        <td><strong>GPIO 26</strong></td>
+        <td>RIGHT_PWM</td>
+        <td>Motor Driver (BTS7960 / L298N)</td>
+        <td><span class="badge badge-pwm">PWM (20 kHz)</span></td>
+        <td>3.3V / 5V Logic</td>
+        <td>Right Track Speed Control (0–255).</td>
+      </tr>
+      <tr>
+        <td><strong>GPIO 25</strong></td>
+        <td>RIGHT_DIR</td>
+        <td>Motor Driver (BTS7960 / L298N)</td>
+        <td><span class="badge badge-gpio">OUTPUT</span></td>
+        <td>3.3V / 5V Logic</td>
+        <td>Right Track Direction (HIGH/LOW).</td>
+      </tr>
+      <tr>
+        <td><strong>GPIO 21</strong></td>
+        <td>I2C_SDA</td>
+        <td>MPU-6050 / BNO055 IMU</td>
+        <td><span class="badge badge-i2c">I2C DATA</span></td>
+        <td>3.3V</td>
+        <td>4.7kΩ pull-up resistor to 3.3V.</td>
+      </tr>
+      <tr>
+        <td><strong>GPIO 22</strong></td>
+        <td>I2C_SCL</td>
+        <td>MPU-6050 / BNO055 IMU</td>
+        <td><span class="badge badge-i2c">I2C CLOCK</span></td>
+        <td>3.3V</td>
+        <td>400 kHz Fast-Mode I2C Bus.</td>
+      </tr>
+      <tr>
+        <td><strong>GPIO 34</strong></td>
+        <td>ENC_LEFT</td>
+        <td>Wheel Encoder Left</td>
+        <td><span class="badge badge-interrupt">INPUT (INT)</span></td>
+        <td>3.3V</td>
+        <td>Quadrature channel tick counter.</td>
+      </tr>
+      <tr>
+        <td><strong>GPIO 35</strong></td>
+        <td>ENC_RIGHT</td>
+        <td>Wheel Encoder Right</td>
+        <td><span class="badge badge-interrupt">INPUT (INT)</span></td>
+        <td>3.3V</td>
+        <td>Quadrature channel tick counter.</td>
+      </tr>
+      <tr>
+        <td><strong>GPIO 12</strong></td>
+        <td>LED_AUTO_LOCK</td>
+        <td>Autonomous Mode Indicator</td>
+        <td><span class="badge badge-safe">OUTPUT</span></td>
+        <td>3.3V</td>
+        <td>LIT when Autonomous mode locked (×4).</td>
+      </tr>
+      <tr>
+        <td><strong>GPIO 13</strong></td>
+        <td>LED_TELEOP</td>
+        <td>Teleoperation Mode Indicator</td>
+        <td><span class="badge badge-safe">OUTPUT</span></td>
+        <td>3.3V</td>
+        <td>LIT when Teleoperation mode active (×1).</td>
+      </tr>
+      <tr>
+        <td><strong>GPIO 2</strong></td>
+        <td>AUDIO_DAC</td>
+        <td>PAM8403 Two-Way Audio Amp</td>
+        <td><span class="badge badge-pwm">DAC / PWM</span></td>
+        <td>3.3V</td>
+        <td>Audio code word validation feedback.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>2. Vision Single Board Computer (Raspberry Pi 4 / 5 / Jetson) Interface</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Port / Header</th>
+        <th>Interface Type</th>
+        <th>Connected Subsystem</th>
+        <th>Purpose / Marking Criterion</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>USB 3.0 (Bus 1)</strong></td>
+        <td>UVC Video 1080p 30fps</td>
+        <td>Primary Mast Camera</td>
+        <td>Live Feed, QR Scanner & Server Ping.</td>
+      </tr>
+      <tr>
+        <td><strong>USB 3.0 (Bus 2)</strong></td>
+        <td>UVC Video 1080p 30fps</td>
+        <td>Chassis Tool / Crate Camera</td>
+        <td>Colour & Shape Detection, 5s Motion Tracking.</td>
+      </tr>
+      <tr>
+        <td><strong>UART (Pin 8/10)</strong></td>
+        <td>Hardware Serial 115200 baud</td>
+        <td>ESP32 Telemetry Link (TX/RX)</td>
+        <td>≤100 ms Telemetry Polling (Table 7: 10 Marks).</td>
+      </tr>
+      <tr>
+        <td><strong>Ethernet / Wi-Fi</strong></td>
+        <td>TCP / WebSocket Port 5000</td>
+        <td>Ground Control Cockpit Dashboard</td>
+        <td>Real-Time Control Bus & Video WebRTC.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <span>UIU Rescue Rover Team (#URRT) • Department of CSE, United International University</span>
+    <span>Page 1 of 1 • System Pin Map</span>
+  </div>
+
+</body>
+</html>

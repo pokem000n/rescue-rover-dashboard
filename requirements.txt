@@ -1,0 +1,20 @@
+# URRT Autonomous Rover - Python Dependencies
+# Compliant with URRT Rulebook V1.3 & Table 7
+
+# Computer Vision & Image Processing
+opencv-python>=4.8.0
+numpy>=1.24.0
+pillow>=10.0.0
+pyzbar>=0.1.9
+
+# Hardware & Telemetry Communications
+pyserial>=3.5
+websocket-client>=1.6.0
+requests>=2.31.0
+
+# Testing & Quality Assurance
+pytest>=7.4.0
+pytest-cov>=4.1.0
+
+# Documentation & Schematics
+reportlab>=4.0.0
